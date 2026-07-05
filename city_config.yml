@@ -1,0 +1,63 @@
+# city_config.yml — Pune, Maharashtra
+# To add a new city: duplicate this file, change values, restart services.
+# Set CITY_CONFIG=city_config_nagpur.yml in .env to switch cities.
+
+city:
+  name: "Pune"
+  state: "Maharashtra"
+  country: "IN"
+  timezone: "Asia/Kolkata"
+  center:
+    lat: 18.5204
+    lon: 73.8567
+  bbox:  # Overpass API bounding box
+    south: 18.40
+    west: 73.72
+    north: 18.65
+    east: 73.98
+  utm_srid: 32643  # UTM Zone 43N for Pune — meter-accurate distance calculations
+
+stations:
+  - name: "Shivajinagar"
+    cpcb_station_id: "site_5029"
+    lat: 18.5308
+    lon: 73.8567
+    network: "CPCB_CAAQMS"
+    elevation_m: 560
+
+  - name: "Swargate"
+    cpcb_station_id: "site_5148"
+    lat: 18.5018
+    lon: 73.8553
+    network: "CPCB_CAAQMS"
+    elevation_m: 555
+
+  - name: "Hadapsar"
+    cpcb_station_id: "site_5150"
+    lat: 18.5089
+    lon: 73.9260
+    network: "CPCB_CAAQMS"
+    elevation_m: 558
+
+  - name: "Kothrud"
+    cpcb_station_id: "site_5149"
+    lat: 18.5074
+    lon: 73.8077
+    network: "CPCB_CAAQMS"
+    elevation_m: 556
+
+polling:
+  cpcb_interval_minutes: 15
+  owm_interval_minutes: 10
+  overpass_refresh_hours: 6
+
+thresholds:
+  spike_aqi: 150
+  spike_exceedance: 1.5
+  rate_of_change_delta: 50
+  rate_of_change_window_seconds: 3600
+
+search:
+  max_radius_m: 5000
+  min_radius_m: 1500
+  wind_speed_radius_scale: 40    # radius = min(1500 + speed*40, max_radius)
