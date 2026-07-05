@@ -4,6 +4,7 @@ import L from 'leaflet';
 import dataContract from '../../data_contract_sample.json';
 import { API } from './api_client';
 import { MapRenderer } from './map_layers';
+import { WebSocketClient } from './ws_client';
 
 // ─── LEAFLET DEFAULT ICON FIX (Vite asset pipeline) ──────────────────────────
 // Without this, Vite can't resolve the default marker PNG paths and throws.
@@ -54,6 +55,10 @@ const GLOBAL_STYLES = `
   @keyframes needleSway {
     0%, 100% { filter: drop-shadow(0 0 4px rgba(239,68,68,0.7)); }
     50%       { filter: drop-shadow(0 0 9px rgba(239,68,68,1.0)); }
+  }
+  @keyframes slideInRight {
+    from { transform: translateX(120%); opacity: 0; }
+    to   { transform: translateX(0);     opacity: 1; }
   }
 
   /* ── Reset ── */
@@ -700,6 +705,47 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [mapRef, setMapRef] = useState(null);
   const [currentConeLayer, setCurrentConeLayer] = useState(null);
+  const [websocketAlert, setWebsocketAlert] = useState(null);
+
+  // ─── WebSocket Client Integration with 5-Second Auto-Reconnect ──
+  useEffect(() => {
+    const ws = new WebSocketClient();
+    ws.connect((msg) => {
+      if (msg && msg.type === 'SPIKE_ALERT') {
+        const { station_name, timestamp, pre_alerts, actionable_intelligence } = msg.payload || {};
+        console.log(`🛎️ Real-time Spike Alert received for station: ${station_name}`);
+        
+        // Trigger Toast Alert
+        setWebsocketAlert({
+          station: station_name,
+          timestamp,
+          pre_alerts,
+          actionable_intelligence
+        });
+
+        // Auto-dismiss toast alert after 12 seconds
+        setTimeout(() => {
+          setWebsocketAlert(prev => {
+            if (prev && prev.station === station_name) return null;
+            return prev;
+          });
+        }, 12000);
+
+        // Dispatches the Voice engine synthesized output
+        if (actionable_intelligence?.localized_advisory) {
+          const advisoryObj = actionable_intelligence.localized_advisory;
+          const speechText = activeLang === 'en' ? advisoryObj.en : activeLang === 'hi' ? advisoryObj.hi : advisoryObj.mr;
+          if (speechText) {
+            playVoiceReport(speechText, activeLang);
+          }
+        }
+      }
+    });
+
+    return () => {
+      ws.disconnect();
+    };
+  }, [activeLang]);
 
   // ─── MapRenderer: Bootstrap station grid + source inventory on map ready ──
   useEffect(() => {
@@ -817,6 +863,96 @@ export default function App() {
 
   return (
     <div className="aq-root">
+
+      {/* ── REAL-TIME WEBSOCKET ALERT TOAST ── */}
+      {websocketAlert && (
+        <div style={{
+          position: 'fixed', top: '24px', right: '24px', zIndex: 9999,
+          width: '380px', background: 'rgba(15,10,10,0.92)',
+          border: '1px solid rgba(239,68,68,0.3)', borderRadius: '16px',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(239,68,68,0.15)',
+          backdropFilter: 'blur(20px)', padding: '16px',
+          color: '#ffffff', fontFamily: '-apple-system, sans-serif',
+          animation: 'slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                display: 'inline-block', width: '8px', height: '8px',
+                background: '#ef4444', borderRadius: '50%',
+                boxShadow: '0 0 10px #ef4444', animation: 'livePulse 1.2s infinite'
+              }} />
+              <span style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: '#ef4444', letterSpacing: '0.1em', fontFamily: 'monospace' }}>
+                Live Spike Alert
+              </span>
+            </div>
+            <button 
+              onClick={() => setWebsocketAlert(null)}
+              style={{
+                background: 'none', border: 'none', color: '#a1a1aa', cursor: 'pointer',
+                fontSize: '16px', padding: '0 4px', display: 'flex', alignItems: 'center',
+                lineHeight: 1
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          <div style={{ fontSize: '14px', fontWeight: 700, color: '#f4f4f5', marginBottom: '4px' }}>
+            🚨 Spike detected at {websocketAlert.station}
+          </div>
+          
+          <div style={{ fontSize: '12px', color: '#a1a1aa', marginBottom: '12px', lineHeight: '1.4' }}>
+            {activeLang === 'en' 
+              ? `Real-time sensor network triggered an alert at ${new Date(websocketAlert.timestamp).toLocaleTimeString()}`
+              : activeLang === 'hi'
+              ? `वास्तविक समय सेंसर नेटवर्क ने अलर्ट ट्रिगर किया`
+              : `रिअल-टाइम सेन्सर नेटवर्कने अलर्ट ट्रिगर केला`
+            }
+          </div>
+
+          {websocketAlert.pre_alerts && (
+            <div style={{
+              background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)',
+              borderRadius: '8px', padding: '8px 10px', marginBottom: '12px', fontSize: '11px'
+            }}>
+              <div style={{ fontWeight: 700, color: '#fb923c', marginBottom: '2px' }}>
+                Forecasted Impact: +{websocketAlert.pre_alerts.estimated_aqi_increase} AQI
+              </div>
+              <div style={{ color: '#d4d4d8', lineHeight: '1.4' }}>
+                {websocketAlert.pre_alerts.advisory}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => {
+                setCurrentStation(websocketAlert.station);
+                setWebsocketAlert(null);
+              }}
+              style={{
+                flex: 1, padding: '8px 12px', borderRadius: '8px', border: 'none',
+                background: '#ef4444', color: '#ffffff', fontSize: '11px', fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'monospace', textTransform: 'uppercase',
+                transition: 'background 0.2s', boxShadow: '0 4px 12px rgba(239,68,68,0.2)'
+              }}
+            >
+              View Radar
+            </button>
+            <button
+              onClick={() => setWebsocketAlert(null)}
+              style={{
+                padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(255,255,255,0.05)', color: '#d4d4d8', fontSize: '11px', fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'monospace', textTransform: 'uppercase'
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── MAP PANEL ───────────────────────────────────────────────────── */}
       <div className="map-panel">
