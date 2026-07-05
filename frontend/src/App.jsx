@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, GeoJSON } from 'react-l
 import L from 'leaflet';
 import dataContract from '../../data_contract_sample.json';
 import { API } from './api_client';
+import { MapRenderer } from './map_layers';
 
 // ─── LEAFLET DEFAULT ICON FIX (Vite asset pipeline) ──────────────────────────
 // Without this, Vite can't resolve the default marker PNG paths and throws.
@@ -596,6 +597,17 @@ function MapCameraController({ activeSource, ranked_candidates, mapCenter }) {
   return null;
 }
 
+// ─── MAP INSTANCE TRACKER ─────────────────────────────────────────────────────
+// Captures the Leaflet map object from React-Leaflet's context so imperative
+// MapRenderer calls (stations, sources, wind cone) can operate on it.
+function MapInstanceTracker({ setMapRef }) {
+  const map = useMap();
+  useEffect(() => {
+    if (map) setMapRef(map);
+  }, [map, setMapRef]);
+  return null;
+}
+
 // ─── WIND COMPASS ─────────────────────────────────────────────────────────────
 // Large floating 72×72 premium compass.
 // windDeg = meteorological "FROM" direction. Needle points into the wind source.
@@ -686,6 +698,43 @@ export default function App() {
   const [currentStation, setCurrentStation] = useState('Shivajinagar');
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [mapRef, setMapRef] = useState(null);
+  const [currentConeLayer, setCurrentConeLayer] = useState(null);
+
+  // ─── MapRenderer: Bootstrap station grid + source inventory on map ready ──
+  useEffect(() => {
+    if (!mapRef) return;
+
+    const bootMapLayers = async () => {
+      console.log('🗺️ Bootstrapping forensic map layers...');
+
+      // 1. Station grid: all 4 monitoring points with AQI-aware pulse
+      await MapRenderer.renderStations(mapRef, (stationName) => {
+        setCurrentStation(stationName);
+      });
+
+      // 2. Source inventory: curated (solid red) + OSM-discovered (dashed amber)
+      await MapRenderer.renderSources(mapRef);
+    };
+
+    bootMapLayers();
+  }, [mapRef]);
+
+  // ─── MapRenderer: Wind cone update on station change ──────────────────────
+  useEffect(() => {
+    if (!mapRef || !currentStation) return;
+
+    const updateCone = async () => {
+      const newConeLayer = await MapRenderer.updateWindConeLayer(
+        mapRef,
+        currentConeLayer,
+        currentStation
+      );
+      setCurrentConeLayer(newConeLayer);
+    };
+
+    updateCone();
+  }, [currentStation, mapRef]);
 
   useEffect(() => {
     setLoading(true);
@@ -783,6 +832,9 @@ export default function App() {
             url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
             maxZoom={20}
           />
+
+          {/* MapRenderer: capture Leaflet instance for imperative layer control */}
+          <MapInstanceTracker setMapRef={setMapRef} />
 
           {/* Cinematic flyTo controller */}
           <MapCameraController
