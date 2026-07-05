@@ -1142,10 +1142,10 @@ export default function App() {
         />
 
         {/* Phase 2: Forensic Timeline Playback Controller Overlay */}
-        <div className="absolute bottom-6 left-6 right-[420px] bg-neutral-900/90 border border-neutral-800/50 p-3 rounded-xl z-[10] flex items-center justify-between gap-6 backdrop-blur-md">
+        <div className="absolute bottom-6 left-6 right-6 lg:right-[430px] bg-neutral-900/95 border border-neutral-800/60 p-3 rounded-xl z-[10] flex items-center gap-4 backdrop-blur-md">
           
-          {/* Left Section: Met Feed Indicators */}
-          <div className="flex items-center gap-3 shrink-0 border-r border-neutral-800 pr-4 text-xs font-mono text-neutral-400">
+          {/* Left Section: Met Feed Indicators (Fixed Width) */}
+          <div className="flex items-center gap-2 shrink-0 border-r border-neutral-800 pr-4 text-[11px] font-mono text-neutral-400 min-w-[180px]">
             <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
             <span className="font-semibold text-neutral-200">MET FEED</span>
             <span>•</span>
@@ -1154,12 +1154,11 @@ export default function App() {
             <span className="text-purple-400">{weather_snapshot?.wind_direction_cardinal ?? '—'}</span>
           </div>
 
-          {/* Center/Right Section: Controls + Slider Track Combo */}
-          <div className="flex items-center flex-1 gap-4 w-full">
-            {/* Play Button */}
+          {/* Center Section: Play Button (Fixed Width) */}
+          <div className="shrink-0">
             <button 
               onClick={() => setIsAnimating(!isAnimating)}
-              className={`font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all shrink-0 shadow-lg ${
+              className={`font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-lg ${
                 isAnimating 
                   ? 'bg-amber-500 hover:bg-amber-600 text-neutral-950 shadow-amber-500/20' 
                   : 'bg-emerald-500 hover:bg-emerald-600 text-neutral-950 shadow-emerald-500/20'
@@ -1179,30 +1178,30 @@ export default function App() {
                 </>
               )}
             </button>
+          </div>
 
-            {/* Actual Scrubber Slider Track Container */}
-            <div className="relative flex-1 flex items-center h-8">
-              <input 
-                type="range" 
-                min="0"
-                max="23"
-                value={currentHourIndex}
-                onChange={(e) => {
-                  setIsAnimating(false); // Stop playback if manually dragged
-                  setCurrentHourIndex(parseInt(e.target.value));
-                }}
-                className="w-full accent-emerald-400 bg-neutral-800 rounded-lg appearance-none h-1.5 cursor-pointer"
-              />
-              {/* Time Labels Container */}
-              <div className="absolute top-6 left-0 right-0 flex justify-between text-[10px] font-mono text-neutral-500 px-1">
-                <span>-24 hours ago</span>
-                <span className="text-emerald-400 font-semibold">
-                  {timelineTimestamps[currentHourIndex] 
-                    ? new Date(timelineTimestamps[currentHourIndex]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                    : 'Loading Frame...'}
-                </span>
-                <span>Live Feed (Now)</span>
-              </div>
+          {/* Right Section: Actual Slider Track (Takes remaining space) */}
+          <div className="relative flex-1 flex items-center h-8 min-w-[200px]">
+            <input 
+              type="range" 
+              min="0"
+              max="23"
+              value={currentHourIndex}
+              onChange={(e) => {
+                setIsAnimating(false); // Stop playback if manually dragged
+                setCurrentHourIndex(parseInt(e.target.value));
+              }}
+              className="w-full accent-emerald-400 bg-neutral-800 rounded-lg appearance-none h-1.5 cursor-pointer"
+            />
+            {/* Time Labels Container */}
+            <div className="absolute top-6 left-0 right-0 flex justify-between text-[10px] font-mono text-neutral-500 px-1">
+              <span>-24 hours ago</span>
+              <span className="text-emerald-400 font-semibold">
+                {timelineTimestamps[currentHourIndex] 
+                  ? new Date(timelineTimestamps[currentHourIndex]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                  : 'Loading Frame...'}
+              </span>
+              <span>Live Feed (Now)</span>
             </div>
           </div>
 
