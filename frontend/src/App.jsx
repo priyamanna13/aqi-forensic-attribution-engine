@@ -1142,55 +1142,70 @@ export default function App() {
         />
 
         {/* Phase 2: Forensic Timeline Playback Controller Overlay */}
-        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000] w-11/12 max-w-4xl bg-slate-900/90 backdrop-blur-md border border-slate-700/50 p-4 rounded-xl shadow-2xl flex items-center gap-4">
-            
-            {/* Play / Pause Toggle Control */}
-            <button
-                onClick={() => setIsAnimating(!isAnimating)}
-                className={`px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all duration-200 ${
-                    isAnimating 
-                    ? 'bg-amber-500 hover:bg-amber-600 text-slate-950' 
-                    : 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                }`}
-                style={{ cursor: 'pointer' }}
+        <div className="absolute bottom-6 left-6 right-[420px] bg-neutral-900/90 border border-neutral-800/50 p-3 rounded-xl z-[10] flex items-center justify-between gap-6 backdrop-blur-md">
+          
+          {/* Left Section: Met Feed Indicators */}
+          <div className="flex items-center gap-3 shrink-0 border-r border-neutral-800 pr-4 text-xs font-mono text-neutral-400">
+            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+            <span className="font-semibold text-neutral-200">MET FEED</span>
+            <span>•</span>
+            <span>{weather_snapshot?.wind_speed_kmh ?? '—'} km/h</span>
+            <span>•</span>
+            <span className="text-purple-400">{weather_snapshot?.wind_direction_cardinal ?? '—'}</span>
+          </div>
+
+          {/* Center/Right Section: Controls + Slider Track Combo */}
+          <div className="flex items-center flex-1 gap-4 w-full">
+            {/* Play Button */}
+            <button 
+              onClick={() => setIsAnimating(!isAnimating)}
+              className={`font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all shrink-0 shadow-lg ${
+                isAnimating 
+                  ? 'bg-amber-500 hover:bg-amber-600 text-neutral-950 shadow-amber-500/20' 
+                  : 'bg-emerald-500 hover:bg-emerald-600 text-neutral-950 shadow-emerald-500/20'
+              }`}
+              style={{ cursor: 'pointer' }}
             >
-                {isAnimating ? (
-                    <>
-                        <span className="w-2 h-4 bg-slate-950 inline-block rounded-xs"></span>
-                        <span className="w-2 h-4 bg-slate-950 inline-block rounded-xs"></span>
-                        <span>Pause</span>
-                    </>
-                ) : (
-                    <>
-                        <span className="w-0 h-0 border-t-8 border-t-transparent border-l-12 border-l-white border-b-8 border-b-transparent inline-block"></span>
-                        <span>Play 24h</span>
-                    </>
-                )}
+              {isAnimating ? (
+                <>
+                  <span className="w-1.5 h-3 bg-neutral-950 inline-block rounded-xs"></span>
+                  <span className="w-1.5 h-3 bg-neutral-950 inline-block rounded-xs"></span>
+                  <span>Pause</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  <span>Play 24h</span>
+                </>
+              )}
             </button>
 
-            {/* Range Slider Frame */}
-            <div className="flex-1 flex flex-col gap-1">
-                <input
-                    type="range"
-                    min="0"
-                    max="23"
-                    value={currentHourIndex}
-                    onChange={(e) => {
-                        setIsAnimating(false); // Stop playback if manually dragged
-                        setCurrentHourIndex(parseInt(e.target.value));
-                    }}
-                    className="w-full accent-emerald-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                />
-                <div className="flex justify-between text-xs text-slate-400 font-mono">
-                    <span>-24 hours ago</span>
-                    <span className="text-emerald-400 font-bold bg-slate-950/60 px-2 py-0.5 rounded border border-slate-800">
-                        {timelineTimestamps[currentHourIndex] 
-                            ? new Date(timelineTimestamps[currentHourIndex]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                            : 'Loading Frame...'}
-                    </span>
-                    <span>Live Feed (Now)</span>
-                </div>
+            {/* Actual Scrubber Slider Track Container */}
+            <div className="relative flex-1 flex items-center h-8">
+              <input 
+                type="range" 
+                min="0"
+                max="23"
+                value={currentHourIndex}
+                onChange={(e) => {
+                  setIsAnimating(false); // Stop playback if manually dragged
+                  setCurrentHourIndex(parseInt(e.target.value));
+                }}
+                className="w-full accent-emerald-400 bg-neutral-800 rounded-lg appearance-none h-1.5 cursor-pointer"
+              />
+              {/* Time Labels Container */}
+              <div className="absolute top-6 left-0 right-0 flex justify-between text-[10px] font-mono text-neutral-500 px-1">
+                <span>-24 hours ago</span>
+                <span className="text-emerald-400 font-semibold">
+                  {timelineTimestamps[currentHourIndex] 
+                    ? new Date(timelineTimestamps[currentHourIndex]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                    : 'Loading Frame...'}
+                </span>
+                <span>Live Feed (Now)</span>
+              </div>
             </div>
+          </div>
+
         </div>
       </div>
 
