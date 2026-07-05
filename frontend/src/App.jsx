@@ -1142,7 +1142,7 @@ export default function App() {
         />
 
         {/* Phase 2: Forensic Timeline Playback Controller Overlay */}
-        <div className="absolute bottom-6 left-6 right-6 lg:right-[430px] bg-neutral-900/95 border border-neutral-800/60 p-3 rounded-xl z-[10] flex items-center gap-4 backdrop-blur-md">
+        <div className="absolute bottom-6 left-6 right-6 lg:right-[430px] z-[10] flex items-center gap-4 p-3 rounded-xl bg-neutral-900/95 border border-neutral-800/60 backdrop-blur-md">
           
           {/* Left Section: Met Feed Indicators (Fixed Width) */}
           <div className="flex items-center gap-2 shrink-0 border-r border-neutral-800 pr-4 text-[11px] font-mono text-neutral-400 min-w-[180px]">
