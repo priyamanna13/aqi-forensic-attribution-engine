@@ -387,7 +387,7 @@ def get_pre_alerts(
     IST = timezone(timedelta(hours=5, minutes=30))
     if timestamp:
         try:
-            check_time = datetime.fromisoformat(timestamp)
+            check_time = datetime.fromisoformat(timestamp.replace(" ", "+"))
             if check_time.tzinfo is None:
                 check_time = check_time.replace(tzinfo=IST)
         except ValueError:
@@ -420,7 +420,7 @@ def replay_snapshot(
 
     IST = timezone(timedelta(hours=5, minutes=30))
     try:
-        target_ts = datetime.fromisoformat(timestamp)
+        target_ts = datetime.fromisoformat(timestamp.replace(" ", "+"))
         if target_ts.tzinfo is None:
             target_ts = target_ts.replace(tzinfo=IST)
     except ValueError:
@@ -482,7 +482,7 @@ def wind_cone(
     IST = timezone(timedelta(hours=5, minutes=30))
     if timestamp:
         try:
-            target_ts = datetime.fromisoformat(timestamp)
+            target_ts = datetime.fromisoformat(timestamp.replace(" ", "+"))
             if target_ts.tzinfo is None:
                 target_ts = target_ts.replace(tzinfo=IST)
         except ValueError:
