@@ -712,16 +712,28 @@ export default function App() {
   const [currentHourIndex, setCurrentHourIndex] = useState(23); // Default to current hour (latest)
   const [timelineTimestamps, setTimelineTimestamps] = useState([]);
 
-  // Generate pichle 24 hours ke ISO strings array on load
+  // Phase 2: Live Time-Series Database Sync Engine
   useEffect(() => {
-    const hours = [];
-    const now = new Date();
-    for (let i = 23; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 60 * 60 * 1000);
-        hours.push(d.toISOString());
-    }
-    setTimelineTimestamps(hours);
-  }, []);
+    if (!currentStation) return;
+
+    const fetchLiveHistoryGrid = async () => {
+        try {
+            console.log(`📡 Querying 24h historical telemetry rows for ${currentStation}...`);
+            const historicalTicks = await API.getTimeline(currentStation);
+            
+            // Extract exact timestamp ISO strings from backend telemetry array
+            const formattedTimestamps = historicalTicks.map(tick => tick.timestamp);
+            setTimelineTimestamps(formattedTimestamps);
+            
+            // Default to the latest record node (Live Feed)
+            setCurrentHourIndex(historicalTicks.length - 1);
+        } catch (err) {
+            console.error("Critical timeline telemetry tracking breach:", err);
+        }
+    };
+
+    fetchLiveHistoryGrid();
+  }, [currentStation]);
 
   // ─── WebSocket Client Integration with 5-Second Auto-Reconnect ──
   useEffect(() => {
