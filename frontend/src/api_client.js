@@ -4,7 +4,7 @@
  */
 export const API = {
     // Anish ka live tunnel endpoint
-    BASE_URL: "https://vocalize-oncoming-wolf.ngrok-free.dev", 
+    BASE_URL: "http://localhost:5000", 
 
     async getStations() {
         const response = await fetch(`${this.BASE_URL}/api/v1/stations`, {

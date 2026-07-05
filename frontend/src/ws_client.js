@@ -3,7 +3,7 @@
  * Phase 2: Live Ngrok WebSocket Integration with Auto-Reconnection
  */
 export class WebSocketClient {
-  constructor(url = "wss://vocalize-oncoming-wolf.ngrok-free.dev/api/v1/simulation/ws") {
+  constructor(url = "ws://localhost:5000/api/v1/simulation/ws") {
     this.url = url;
     this.socket = null;
     this.reconnectTimer = null;
