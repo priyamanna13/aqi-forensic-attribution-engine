@@ -162,6 +162,38 @@ features = body.get("features", [])
 ok(len(features) >= 1, f"at least 1 source feature (got {len(features)})")
 
 # ============================================================
+print("\n=== GET /api/v1/timeline/Shivajinagar ===")
+code, body = get("/api/v1/timeline/Shivajinagar")
+ok(code == 200, f"status 200 for timeline, got {code}")
+ok(isinstance(body, list), f"timeline response is a list (len={len(body)})")
+ok(len(body) == 24, f"timeline returned 24 hourly ticks")
+if body:
+    t = body[0]
+    ok("timestamp" in t, "tick has timestamp")
+    ok("aqi" in t, "tick has aqi")
+    ok("was_spike" in t, "tick has was_spike")
+    ok("dominant_pollutant" in t, "tick has dominant_pollutant")
+    ok("wind_dir" in t, "tick has wind_dir")
+    ok("wind_speed" in t, "tick has wind_speed")
+
+# ============================================================
+print("\n=== GET /api/v1/replay/Shivajinagar ===")
+code, body = get("/api/v1/replay/Shivajinagar?timestamp=2026-07-05T12:00:00+05:30")
+ok(code == 200, f"status 200 for replay, got {code}")
+ok("event_id" in body, "replay payload has event_id")
+ok("wind_cone_geometry" in body, "replay payload has wind_cone_geometry")
+ok("actionable_intelligence" in body, "replay payload has actionable_intelligence")
+ok("pre_alerts" in body, "replay payload has pre_alerts")
+
+# ============================================================
+print("\n=== GET /api/v1/cone/Shivajinagar ===")
+code, body = get("/api/v1/cone/Shivajinagar")
+ok(code == 200, f"status 200 for cone, got {code}")
+ok(body.get("type") == "Feature", "cone response is Feature")
+ok("geometry" in body and body["geometry"].get("type") == "Polygon", "cone geometry is Polygon")
+ok("properties" in body and body["properties"].get("cone_type") == "upwind_source_area", "cone has correct properties")
+
+# ============================================================
 print(f"\n{'='*60}")
 print(f"RESULT: {PASS} passed / {FAIL} failed")
 if FAIL == 0:
