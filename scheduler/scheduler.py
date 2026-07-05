@@ -51,6 +51,20 @@ def weather_sync_job() -> None:
         log.error("Error during weather sync job: %s", exc, exc_info=True)
 
 
+def overpass_refresh_job() -> None:
+    log.info("Starting scheduled Overpass source discovery...")
+    try:
+        from pipeline.overpass_client import OverpassSourceDiscovery
+        from db.connection import SessionLocal
+        with SessionLocal() as session:
+            count = OverpassSourceDiscovery().discover_sources(session)
+            log.info("Overpass source discovery complete. Sources discovered/updated: %d", count)
+    except ImportError:
+        log.warning("pipeline.overpass_client not found (Person 2 module not merged yet). Skipping Overpass job.")
+    except Exception as exc:
+        log.error("Error during Overpass refresh job: %s", exc, exc_info=True)
+
+
 def create_scheduler(config_path: Optional[Path] = None) -> BlockingScheduler:
     path = config_path or Path(os.getenv("CITY_CONFIG", str(DEFAULT_CONFIG_PATH)))
     if not path.exists():
@@ -60,6 +74,7 @@ def create_scheduler(config_path: Optional[Path] = None) -> BlockingScheduler:
 
     cpcb_interval = config.get("polling", {}).get("cpcb_interval_minutes", 15)
     owm_interval = config.get("polling", {}).get("owm_interval_minutes", 10)
+    overpass_hours = config.get("polling", {}).get("overpass_refresh_hours", 6)
 
     scheduler = BlockingScheduler()
 
@@ -77,6 +92,14 @@ def create_scheduler(config_path: Optional[Path] = None) -> BlockingScheduler:
         minutes=owm_interval,
         id="weather_sync",
         misfire_grace_time=60,
+    )
+
+    scheduler.add_job(
+        overpass_refresh_job,
+        "interval",
+        hours=overpass_hours,
+        id="overpass_refresh",
+        misfire_grace_time=300,
     )
 
     return scheduler
