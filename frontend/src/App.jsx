@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import dataContract from '../../data_contract_sample.json';
+import { API } from './api_client';
 
 // ─── LEAFLET DEFAULT ICON FIX (Vite asset pipeline) ──────────────────────────
 // Without this, Vite can't resolve the default marker PNG paths and throws.
@@ -689,16 +690,7 @@ export default function App() {
   useEffect(() => {
     setLoading(true);
     setActiveSource(null); // Reset selected source when switching stations
-    fetch(`https://vocalize-oncoming-wolf.ngrok-free.dev/api/v1/attribution/${currentStation}`, {
-      headers: {
-        'ngrok-skip-browser-warning': 'true',
-        'Accept': 'application/json'
-      }
-    })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
+    API.getAttribution(currentStation)
       .then(data => {
         setDashboardData(data);
         setLoading(false);
