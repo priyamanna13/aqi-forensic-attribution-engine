@@ -54,7 +54,7 @@ def health():
 # --------------------------------------------------------------------------- #
 # Dry-run helpers (mock path, no DB)
 # --------------------------------------------------------------------------- #
-def _dry_run_attribution(station_name: str) -> dict:
+def _dry_run_attribution(station_name: str, target_time: datetime = None) -> dict:
     """Build the full contract response from mock data, no PostGIS required.
 
     Uses the per-station DemoScenario profile to generate unique data for
@@ -64,11 +64,17 @@ def _dry_run_attribution(station_name: str) -> dict:
     settings = get_settings()
     tz = ZoneInfo(settings.tz)
 
-    h, m = scenario.spike_local_time.split(":")
-    spike_local = datetime.now(tz=tz).replace(
-        hour=int(h), minute=int(m), second=0, microsecond=0
-    )
-    spike_utc = spike_local.astimezone(timezone.utc)
+    if target_time is None:
+        h, m = scenario.spike_local_time.split(":")
+        spike_local = datetime.now(tz=tz).replace(
+            hour=int(h), minute=int(m), second=0, microsecond=0
+        )
+        spike_utc = spike_local.astimezone(timezone.utc)
+        local_hour = int(h) + int(m) / 60.0
+    else:
+        spike_local = target_time.astimezone(tz)
+        spike_utc = target_time.astimezone(timezone.utc)
+        local_hour = spike_local.hour + spike_local.minute / 60.0
 
     # --- trigger_station (Task 1) ----------------------------------------
     from .contract import build_trigger_station_block
@@ -79,7 +85,7 @@ def _dry_run_attribution(station_name: str) -> dict:
     mock_aq = get_source(
         "mock",
         target_spike_aqi=scenario.spike_aqi,
-        spike_local_hour=int(h) + int(m) / 60.0,
+        spike_local_hour=local_hour,
         base_profile=scenario.base_profile,
         peak_ratios=scenario.peak_ratios,
         dominant_override=scenario.dominant_pollutant,
@@ -110,7 +116,7 @@ def _dry_run_attribution(station_name: str) -> dict:
 
     # Create a per-scenario weather source with the scenario's weather values.
     weather_src = MockIMDSource(
-        scenario_local_hour=int(h) + int(m) / 60.0,
+        scenario_local_hour=local_hour,
         base=dict(scenario.weather_overrides),
         scenario_values=dict(scenario.weather_overrides),
     )
@@ -399,6 +405,83 @@ def list_sources():
         "count": len(sources),
         "sources": sources,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Timeline History Replay System (Phase 2 — Person 1)
+# --------------------------------------------------------------------------- #
+@app.get("/api/v1/timeline/{station_name}", tags=["Replay"])
+def get_timeline(station_name: str):
+    """Return an array of 24 hourly tick objects for the replay slider."""
+    scenario = get_scenario(station_name)
+    settings = get_settings()
+    tz = ZoneInfo(settings.tz)
+    
+    from .sources import get_source
+    from .pipeline import PipelineController
+    from .weather_sources.mock import MockIMDSource
+    
+    h, m = scenario.spike_local_time.split(":")
+    mock_aq = get_source(
+        "mock",
+        target_spike_aqi=scenario.spike_aqi,
+        spike_local_hour=int(h) + int(m) / 60.0,
+        base_profile=scenario.base_profile,
+        peak_ratios=scenario.peak_ratios,
+        dominant_override=scenario.dominant_pollutant,
+    )
+    controller = PipelineController(source=mock_aq)
+    
+    now_local = datetime.now(tz=tz).replace(minute=0, second=0, microsecond=0)
+    from datetime import timedelta
+    
+    ticks = []
+    # Generate 24 hours (from 23 hours ago to now)
+    for i in range(24):
+        ts = now_local - timedelta(hours=23 - i)
+        ts_utc = ts.astimezone(timezone.utc)
+        
+        # Get AQI
+        raw_aq = mock_aq._reading_for(scenario.station_name, ts_utc)
+        reading, _ = controller.ingest_reading(raw_aq)
+        
+        # Get Weather for wind
+        weather_src = MockIMDSource(
+            scenario_local_hour=ts.hour + ts.minute / 60.0,
+            base=dict(scenario.weather_overrides),
+            scenario_values=dict(scenario.weather_overrides),
+        )
+        raw_weather = weather_src.fetch_snapshot(scenario.station_name, ts_utc)
+        
+        aqi = reading.total_aqi if reading else 50
+        dominant = reading.dominant_pollutant if reading else "pm10"
+        wind_dir = raw_weather.wind_direction_deg if raw_weather else 180
+        wind_speed = raw_weather.wind_speed_kmh if raw_weather else 5.0
+        
+        # A spike is defined if AQI >= 150
+        was_spike = aqi >= 150
+        
+        ticks.append({
+            "timestamp": ts.isoformat(),
+            "aqi": aqi,
+            "was_spike": was_spike,
+            "dominant_pollutant": dominant.upper(),
+            "wind_dir": wind_dir,
+            "wind_speed": wind_speed
+        })
+        
+    return ticks
+
+
+@app.get("/api/v1/replay/{station_name}", tags=["Replay"])
+def get_replay(station_name: str, timestamp: str = Query(..., description="ISO-8601 timestamp")):
+    """Full attribution pipeline reconstructed for a historical hour."""
+    try:
+        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ISO-8601 timestamp format")
+    
+    return _dry_run_attribution(station_name, target_time=dt)
 
 
 # --------------------------------------------------------------------------- #

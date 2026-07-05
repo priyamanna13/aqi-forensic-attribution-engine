@@ -46,5 +46,25 @@ export const API = {
             }
         });
         return await response.json();
+    },
+
+    async getTimeline(stationName) {
+        const response = await fetch(`${this.BASE_URL}/api/v1/timeline/${stationName}`, {
+            headers: {
+                'ngrok-skip-browser-warning': 'true',
+                'Accept': 'application/json'
+            }
+        });
+        return await response.json();
+    },
+
+    async getReplay(stationName, timestamp) {
+        const response = await fetch(`${this.BASE_URL}/api/v1/replay/${stationName}?timestamp=${encodeURIComponent(timestamp)}`, {
+            headers: {
+                'ngrok-skip-browser-warning': 'true',
+                'Accept': 'application/json'
+            }
+        });
+        return await response.json();
     }
 };
