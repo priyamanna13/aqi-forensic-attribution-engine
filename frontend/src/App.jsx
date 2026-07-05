@@ -707,6 +707,22 @@ export default function App() {
   const [currentConeLayer, setCurrentConeLayer] = useState(null);
   const [websocketAlert, setWebsocketAlert] = useState(null);
 
+  // Phase 2: Timeline Engine States
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [currentHourIndex, setCurrentHourIndex] = useState(23); // Default to current hour (latest)
+  const [timelineTimestamps, setTimelineTimestamps] = useState([]);
+
+  // Generate pichle 24 hours ke ISO strings array on load
+  useEffect(() => {
+    const hours = [];
+    const now = new Date();
+    for (let i = 23; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 60 * 60 * 1000);
+        hours.push(d.toISOString());
+    }
+    setTimelineTimestamps(hours);
+  }, []);
+
   // ─── WebSocket Client Integration with 5-Second Auto-Reconnect ──
   useEffect(() => {
     const ws = new WebSocketClient();
@@ -766,21 +782,46 @@ export default function App() {
     bootMapLayers();
   }, [mapRef]);
 
-  // ─── MapRenderer: Wind cone update on station change ──────────────────────
+  // Auto-Playback Animation Frame Engine
   useEffect(() => {
-    if (!mapRef || !currentStation) return;
+    let intervalId = null;
 
-    const updateCone = async () => {
+    if (isAnimating) {
+        intervalId = setInterval(() => {
+            setCurrentHourIndex((prevIndex) => {
+                if (prevIndex >= 23) {
+                    setIsAnimating(false); // Loop end, stop playback
+                    return 23;
+                }
+                return prevIndex + 1;
+            });
+        }, 1000); // 1 second interval per simulation hour
+    } else {
+        clearInterval(intervalId);
+    }
+
+    return () => clearInterval(intervalId); // Cleanup leak vectors
+  }, [isAnimating]);
+
+  // Phase 2: Weather Ingestion Sync based on Timeline Slider
+  useEffect(() => {
+    if (!mapRef || !currentStation || timelineTimestamps.length === 0) return;
+
+    const updateHourlyCone = async () => {
+      const targetTimestamp = timelineTimestamps[currentHourIndex];
+      console.log(`⏱️ Syncing spatial matrix frame for ${currentStation} at hour offset index: ${currentHourIndex}`);
+      
       const newConeLayer = await MapRenderer.updateWindConeLayer(
         mapRef,
         currentConeLayer,
-        currentStation
+        currentStation,
+        targetTimestamp // Passing exact ISO string to Anish's spatial query
       );
       setCurrentConeLayer(newConeLayer);
     };
 
-    updateCone();
-  }, [currentStation, mapRef]);
+    updateHourlyCone();
+  }, [currentHourIndex, currentStation, timelineTimestamps, mapRef]);
 
   useEffect(() => {
     setLoading(true);
@@ -1087,6 +1128,58 @@ export default function App() {
           cardinal={compassCard}
           label={t.wind_label}
         />
+
+        {/* Phase 2: Forensic Timeline Playback Controller Overlay */}
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000] w-11/12 max-w-4xl bg-slate-900/90 backdrop-blur-md border border-slate-700/50 p-4 rounded-xl shadow-2xl flex items-center gap-4">
+            
+            {/* Play / Pause Toggle Control */}
+            <button
+                onClick={() => setIsAnimating(!isAnimating)}
+                className={`px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all duration-200 ${
+                    isAnimating 
+                    ? 'bg-amber-500 hover:bg-amber-600 text-slate-950' 
+                    : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                }`}
+                style={{ cursor: 'pointer' }}
+            >
+                {isAnimating ? (
+                    <>
+                        <span className="w-2 h-4 bg-slate-950 inline-block rounded-xs"></span>
+                        <span className="w-2 h-4 bg-slate-950 inline-block rounded-xs"></span>
+                        <span>Pause</span>
+                    </>
+                ) : (
+                    <>
+                        <span className="w-0 h-0 border-t-8 border-t-transparent border-l-12 border-l-white border-b-8 border-b-transparent inline-block"></span>
+                        <span>Play 24h</span>
+                    </>
+                )}
+            </button>
+
+            {/* Range Slider Frame */}
+            <div className="flex-1 flex flex-col gap-1">
+                <input
+                    type="range"
+                    min="0"
+                    max="23"
+                    value={currentHourIndex}
+                    onChange={(e) => {
+                        setIsAnimating(false); // Stop playback if manually dragged
+                        setCurrentHourIndex(parseInt(e.target.value));
+                    }}
+                    className="w-full accent-emerald-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                />
+                <div className="flex justify-between text-xs text-slate-400 font-mono">
+                    <span>-24 hours ago</span>
+                    <span className="text-emerald-400 font-bold bg-slate-950/60 px-2 py-0.5 rounded border border-slate-800">
+                        {timelineTimestamps[currentHourIndex] 
+                            ? new Date(timelineTimestamps[currentHourIndex]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                            : 'Loading Frame...'}
+                    </span>
+                    <span>Live Feed (Now)</span>
+                </div>
+            </div>
+        </div>
       </div>
 
       {/* ── SIDEBAR ───────────────────────────────────────────────────────── */}
