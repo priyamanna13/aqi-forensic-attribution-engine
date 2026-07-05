@@ -23,8 +23,9 @@ from pathlib import Path
 from typing import Any, Optional
 import yaml
 
-from fastapi import Depends, FastAPI, HTTPException, status, Query
+from fastapi import Depends, FastAPI, HTTPException, status, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from api.ws_manager import manager
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -364,6 +365,9 @@ def run_attribution_endpoint(
     _persist_alert(session, station, full_payload)
     session.commit()
 
+    # ---- live push broadcast (Phase 3) -------------------------------------
+    manager.broadcast_sync(full_payload)
+
     return full_payload
 
 
@@ -558,3 +562,31 @@ def trigger_simulated_spike(
         timestamp=datetime.now(IST).isoformat(),
     )
     return run_attribution_endpoint(req, session)
+
+
+# ============================================================
+# WebSocket Live Push Endpoints (Phase 3)
+# ============================================================
+
+@app.websocket("/ws/live")
+@app.websocket("/ws")
+@app.websocket("/simulation/ws")
+@app.websocket("/api/v1/simulation/ws")
+@app.websocket("/api/v1/ws/live")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:
+        manager.disconnect(websocket)
+
+
+@app.post("/api/v1/ws/broadcast", tags=["WebSocket"], status_code=status.HTTP_200_OK)
+@app.post("/ws/broadcast", tags=["WebSocket"], status_code=status.HTTP_200_OK)
+async def broadcast_to_websockets(payload: dict[str, Any]):
+    """Broadcast an arbitrary JSON payload to all connected WebSocket clients."""
+    await manager.broadcast(payload)
+    return {"status": "broadcasted", "client_count": len(manager.active_connections)}

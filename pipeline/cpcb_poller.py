@@ -204,6 +204,21 @@ class CPCBPoller:
             "synthetic": True,
         }
 
+    def _push_to_websocket(self, payload: dict[str, Any]) -> None:
+        """Push spike payload to local WebSocket manager and remote backend service."""
+        try:
+            from api.ws_manager import manager
+            manager.broadcast_sync(payload)
+        except Exception as exc:
+            log.debug("Local ws broadcast skipped: %s", exc)
+
+        for host in ["http://backend:5000", "http://localhost:5000"]:
+            try:
+                requests.post(f"{host}/api/v1/ws/broadcast", json=payload, timeout=2)
+                break
+            except Exception:
+                continue
+
     def poll_all_stations(self, session: Optional[Session] = None) -> list[dict[str, Any]]:
         """Poll all stations in city_config, persist readings, and trigger attribution on spikes."""
         own_session = session is None
@@ -288,9 +303,11 @@ class CPCBPoller:
                         )
                         session.add(alert)
                         payloads.append(full_payload)
+                        self._push_to_websocket(full_payload)
                     except Exception as attr_err:
                         log.error("Attribution failed for %s: %s", st_name, attr_err)
                         payloads.append(top_half)
+                        self._push_to_websocket(top_half)
 
             if own_session:
                 session.commit()

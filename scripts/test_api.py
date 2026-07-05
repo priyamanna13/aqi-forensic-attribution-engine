@@ -194,6 +194,13 @@ ok("geometry" in body and body["geometry"].get("type") == "Polygon", "cone geome
 ok("properties" in body and body["properties"].get("cone_type") == "upwind_source_area", "cone has correct properties")
 
 # ============================================================
+print("\n=== POST /api/v1/ws/broadcast (Phase 3 WebSocket Live Push Hook) ===")
+code, body = post("/api/v1/ws/broadcast", {"test_event": "spike_detected", "aqi": 340.0})
+ok(code == 200, f"status 200 for ws broadcast, got {code}")
+ok(body.get("status") == "broadcasted", f"status == 'broadcasted': {body.get('status')}")
+ok("client_count" in body, "response has client_count")
+
+# ============================================================
 print(f"\n{'='*60}")
 print(f"RESULT: {PASS} passed / {FAIL} failed")
 if FAIL == 0:
