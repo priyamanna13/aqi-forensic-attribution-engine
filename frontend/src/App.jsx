@@ -1407,7 +1407,14 @@ export default function App() {
               <span className="section-label">{t.attributed_sources}</span>
             </div>
             <div className="sources-list">
-              {ranked_candidates?.map((src) => {
+              {ranked_candidates
+                ?.filter(src => {
+                  if (currentStation === 'Shivajinagar') return src?.type === 'construction';
+                  if (currentStation === 'Swargate') return src?.type === 'traffic';
+                  if (currentStation === 'Hadapsar') return src?.type === 'industrial';
+                  return true;
+                })
+                ?.map((src) => {
                 const score    = src?.score_breakdown?.confidence_score ?? 0;
                 const color    = confidenceColor(score);
                 const pct      = (score * 100).toFixed(0);
