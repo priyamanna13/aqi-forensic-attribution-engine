@@ -710,7 +710,16 @@ export default function App() {
   // Phase 2: Timeline Engine States
   const [isAnimating, setIsAnimating] = useState(false);
   const [currentHourIndex, setCurrentHourIndex] = useState(23); // Default to current hour (latest)
-  const [timelineTimestamps, setTimelineTimestamps] = useState([]);
+  const [timelineTimestamps, setTimelineTimestamps] = useState(() => {
+    // Fallback: Generate pichle 24 hours ke ISO strings array on initialization
+    const hours = [];
+    const now = new Date();
+    for (let i = 23; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 60 * 60 * 1000);
+        hours.push(d.toISOString());
+    }
+    return hours;
+  });
 
   // Phase 2: Live Time-Series Database Sync Engine
   useEffect(() => {
@@ -721,14 +730,25 @@ export default function App() {
             console.log(`📡 Querying 24h historical telemetry rows for ${currentStation}...`);
             const historicalTicks = await API.getTimeline(currentStation);
             
-            // Extract exact timestamp ISO strings from backend telemetry array
-            const formattedTimestamps = historicalTicks.map(tick => tick.timestamp);
-            setTimelineTimestamps(formattedTimestamps);
-            
-            // Default to the latest record node (Live Feed)
-            setCurrentHourIndex(historicalTicks.length - 1);
+            if (historicalTicks && historicalTicks.length > 0) {
+                // Extract exact timestamp ISO strings from backend telemetry array
+                const formattedTimestamps = historicalTicks.map(tick => tick.timestamp);
+                setTimelineTimestamps(formattedTimestamps);
+                setCurrentHourIndex(historicalTicks.length - 1);
+            } else {
+                throw new Error("Empty timeline ticks received");
+            }
         } catch (err) {
-            console.error("Critical timeline telemetry tracking breach:", err);
+            console.warn("Telemetry database offline, falling back to local dummy simulation tracks:", err);
+            // Regenerate fallback hours relative to current time
+            const hours = [];
+            const now = new Date();
+            for (let i = 23; i >= 0; i--) {
+                const d = new Date(now.getTime() - i * 60 * 60 * 1000);
+                hours.push(d.toISOString());
+            }
+            setTimelineTimestamps(hours);
+            setCurrentHourIndex(23);
         }
     };
 
@@ -861,14 +881,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (loading || !dashboardData?.actionable_intelligence?.localized_advisory) return;
+    const activeData = dashboardData || dataContract;
+    if (loading || !activeData?.actionable_intelligence?.localized_advisory) return;
 
     // Clear any pending debounce from previous trigger
     if (speechTimerRef.current) clearTimeout(speechTimerRef.current);
 
     // Debounce: wait 600ms for state to settle before speaking
     speechTimerRef.current = setTimeout(() => {
-      const advisoryObj = dashboardData.actionable_intelligence.localized_advisory;
+      const advisoryObj = activeData.actionable_intelligence.localized_advisory;
       const targetSpeechText = activeLang === 'en' ? advisoryObj.en : activeLang === 'hi' ? advisoryObj.hi : advisoryObj.mr;
 
       if (targetSpeechText && targetSpeechText.trim() !== '') {
@@ -877,24 +898,15 @@ export default function App() {
     }, 600);
   }, [dashboardData, activeLang, loading]);
 
-  // Loading guard — show connecting screen until live data arrives
-  if (loading || !dashboardData) {
-    return (
-      <div className="aq-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100vw', height: '100vh', background: '#08080a' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '24px', marginBottom: '10px' }}>🛰️</div>
-          <div style={{ fontSize: '14px', fontFamily: 'monospace', color: '#a1a1aa' }}>Connecting to Live Intelligence Pipeline via Ngrok...</div>
-        </div>
-      </div>
-    );
-  }
+  // Loading guard bypassed for timeline playback / offline resilience
+  const activeData = dashboardData || dataContract;
 
   const {
     trigger_station,
     weather_snapshot,
     ranked_candidates,
     actionable_intelligence,
-  } = dashboardData || {};
+  } = activeData || {};
 
   // Guard: if coordinates are missing, fall back to Mumbai centre.
   const rawLat = trigger_station?.coordinates?.[1];
@@ -1033,10 +1045,10 @@ export default function App() {
           />
 
           {/* Wind Cone GeoJSON Overlay */}
-          {dashboardData?.wind_cone_geometry && (
+          {activeData?.wind_cone_geometry && (
             <GeoJSON
               key={currentStation}
-              data={dashboardData.wind_cone_geometry}
+              data={activeData.wind_cone_geometry}
               style={(feature) => {
                 const s = feature?.properties?.style;
                 return {
@@ -1288,7 +1300,7 @@ export default function App() {
             </div>
 
             {/* Ambiguity Alert Banner */}
-            {dashboardData?.pre_alerts?.source?.includes('AMBIGUITY') && (
+            {activeData?.pre_alerts?.source?.includes('AMBIGUITY') && (
               <div style={{
                 background: 'rgba(245,158,11,0.08)',
                 border: '1px solid rgba(245,158,11,0.25)',
@@ -1318,7 +1330,7 @@ export default function App() {
             <div className="advisory-card">
               <p className="advisory-text">
                 {(() => {
-                  const advisoryObj = dashboardData?.actionable_intelligence?.localized_advisory;
+                  const advisoryObj = activeData?.actionable_intelligence?.localized_advisory;
                   const currentText = advisoryObj
                     ? (activeLang === 'en' ? advisoryObj.en : activeLang === 'hi' ? advisoryObj.hi : advisoryObj.mr)
                     : '';
