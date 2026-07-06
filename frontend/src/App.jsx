@@ -1142,7 +1142,7 @@ export default function App() {
         />
 
         {/* Phase 2: Forensic Timeline Playback Controller Overlay */}
-        <div className="absolute bottom-6 left-6 right-6 lg:right-[440px] z-[50] flex items-center justify-start gap-4 p-3 rounded-xl bg-neutral-900/95 border border-neutral-800/60 backdrop-blur-md max-w-[calc(100vw-48px)] overflow-visible">
+        <div className="absolute bottom-6 left-6 right-6 lg:right-[440px] z-[50] flex items-center justify-start gap-6 p-3 rounded-xl bg-neutral-900/95 border border-neutral-800/60 backdrop-blur-md overflow-visible">
           
           {/* Left Section: Met Feed Indicators (Fixed Width) */}
           <div className="flex items-center gap-2 shrink-0 border-r border-neutral-800 pr-4 text-[11px] font-mono text-neutral-400 min-w-[180px]">
@@ -1155,20 +1155,22 @@ export default function App() {
           </div>
 
           {/* Center Section: Play Button (Fixed Width) */}
-          <div className="shrink-0 flex items-center justify-center h-9 min-w-[100px] w-[100px]">
+          <div className="shrink-0 flex items-center justify-center" style={{ minWidth: '110px', width: '110px', height: '36px' }}>
             <button 
               onClick={() => setIsAnimating(!isAnimating)}
               className={
                 isAnimating
-                  ? '!bg-amber-500 hover:!bg-amber-600 text-neutral-950 font-bold px-4 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-amber-500/20 cursor-pointer shrink-0'
-                  : '!bg-emerald-500 hover:!bg-emerald-600 text-neutral-950 font-bold px-4 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer shrink-0'
+                  ? '!bg-amber-500 hover:!bg-amber-600 text-neutral-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-amber-500/20 cursor-pointer'
+                  : '!bg-emerald-500 hover:!bg-emerald-600 text-neutral-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer'
               }
               style={{
+                width: '100%',
+                height: '100%',
                 minWidth: '100px',
-                width: '100px',
+                display: 'flex',
                 backgroundColor: isAnimating ? '#f59e0b' : '#10b981',
-                display: 'inline-flex',
                 color: '#0a0a0a',
+                padding: '6px 12px',
               }}
             >
               {isAnimating ? (
