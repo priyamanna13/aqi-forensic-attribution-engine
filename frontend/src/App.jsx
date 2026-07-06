@@ -1142,7 +1142,7 @@ export default function App() {
         />
 
         {/* Phase 2: Forensic Timeline Playback Controller Overlay */}
-        <div className="absolute bottom-6 left-6 right-6 lg:right-[430px] z-[10] flex items-center gap-4 p-3 rounded-xl bg-neutral-900/95 border border-neutral-800/60 backdrop-blur-md">
+        <div className="absolute bottom-6 left-6 right-6 lg:right-[440px] z-[50] flex items-center justify-start gap-4 p-3 rounded-xl bg-neutral-900/95 border border-neutral-800/60 backdrop-blur-md max-w-[calc(100vw-48px)] overflow-visible">
           
           {/* Left Section: Met Feed Indicators (Fixed Width) */}
           <div className="flex items-center gap-2 shrink-0 border-r border-neutral-800 pr-4 text-[11px] font-mono text-neutral-400 min-w-[180px]">
@@ -1158,12 +1158,18 @@ export default function App() {
           <div className="shrink-0">
             <button 
               onClick={() => setIsAnimating(!isAnimating)}
-              className={`font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-lg ${
-                isAnimating 
-                  ? 'bg-amber-500 hover:bg-amber-600 text-neutral-950 shadow-amber-500/20' 
-                  : 'bg-emerald-500 hover:bg-emerald-600 text-neutral-950 shadow-emerald-500/20'
-              }`}
-              style={{ cursor: 'pointer' }}
+              className={
+                isAnimating
+                  ? '!bg-amber-500 hover:!bg-amber-600 text-neutral-950 font-bold px-4 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-amber-500/20 cursor-pointer shrink-0'
+                  : '!bg-emerald-500 hover:!bg-emerald-600 text-neutral-950 font-bold px-4 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer shrink-0'
+              }
+              style={{
+                minWidth: '100px',
+                width: '100px',
+                backgroundColor: isAnimating ? '#f59e0b' : '#10b981',
+                display: 'inline-flex',
+                color: '#0a0a0a',
+              }}
             >
               {isAnimating ? (
                 <>
@@ -1181,7 +1187,7 @@ export default function App() {
           </div>
 
           {/* Right Section: Actual Slider Track (Takes remaining space) */}
-          <div className="relative flex-1 flex items-center h-8 min-w-[200px]">
+          <div className="relative flex-1 flex items-center h-8 min-w-[100px] max-w-full">
             <input 
               type="range" 
               min="0"
