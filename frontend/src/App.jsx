@@ -1155,7 +1155,7 @@ export default function App() {
           </div>
 
           {/* Center Section: Play Button (Fixed Width) */}
-          <div className="shrink-0">
+          <div className="shrink-0 flex items-center justify-center h-9 min-w-[100px] w-[100px]">
             <button 
               onClick={() => setIsAnimating(!isAnimating)}
               className={
