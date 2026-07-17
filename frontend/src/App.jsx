@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, startTransition } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import dataContract from '../../data_contract_sample.json';
@@ -700,8 +700,13 @@ export default function App() {
         return res.json();
       })
       .then(data => {
-        setDashboardData(data);
-        setLoading(false);
+        // Wrap heavy telemetry state commit in startTransition so React marks it
+        // as a non-urgent transition. The UI thread stays unblocked during stream
+        // bursts and rapid station-switch renders — eliminates DOM-thread throttling.
+        startTransition(() => {
+          setDashboardData(data);
+          setLoading(false);
+        });
       })
       .catch(err => {
         console.error("Scenario Integration Failed:", err);
@@ -831,11 +836,11 @@ export default function App() {
           </Marker>
 
           {/* Attributed source markers */}
-          {ranked_candidates?.map((src) => {
+          {ranked_candidates?.map((src, index) => {
             if (!src?.coordinates || src.coordinates.length < 2) return null;
             return (
               <Marker
-                key={src.id}
+                key={src.id || src.name || `source-${index}`}
                 position={[src.coordinates[1], src.coordinates[0]]}
                 icon={createSourceIcon(src.rank)}
               >
@@ -1085,7 +1090,7 @@ export default function App() {
               <span className="section-label">{t.attributed_sources}</span>
             </div>
             <div className="sources-list">
-              {ranked_candidates?.map((src) => {
+              {ranked_candidates?.map((src, index) => {
                 const score    = src?.score_breakdown?.confidence_score ?? 0;
                 const color    = confidenceColor(score);
                 const pct      = (score * 100).toFixed(0);
@@ -1095,7 +1100,7 @@ export default function App() {
 
                 return (
                   <div
-                    key={src?.id}
+                    key={src?.id || src?.name || `source-${index}`}
                     className={`source-card${isActive ? ' active' : ''}`}
                     onClick={() => setActiveSource(isActive ? null : src?.id)}
                   >
