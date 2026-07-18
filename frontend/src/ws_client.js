@@ -13,7 +13,8 @@
  *    deterministic for demo environments where network latency is controlled.
  */
 
-const WS_URL = 'ws://localhost:5000/ws/live';
+import { ENDPOINTS } from './api_config';
+const WS_URL = ENDPOINTS.liveWebSocket();
 const RECONNECT_DELAY_MS = 5000;
 
 export class AQIWebSocketClient {
