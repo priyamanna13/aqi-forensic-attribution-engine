@@ -19,6 +19,7 @@ Design principles:
 """
 from __future__ import annotations
 
+import logging
 import math
 import time
 import uuid
@@ -32,6 +33,78 @@ from sqlalchemy.orm import Session
 from db.models import PollutionSource, Station
 from .validators import validate_aqi, validate_wind, validate_pollutant_reading
 from .pipeline_logger import log_pipeline_run
+
+log = logging.getLogger(__name__)
+
+
+# ============================================================
+# Wet-Scavenging Environmental Physics Model
+# ============================================================
+# Exponential particulate wash-out driven by live precipitation.
+# When rainfall is actively detected, the engine scales down PM2.5/PM10
+# concentrations to simulate real-world atmospheric cleaning (wet deposition).
+# Scavenging coefficient (lambda) ~ 0.15 per mm/hr is a conservative
+# estimate for below-cloud washout of coarse and fine particulate matter.
+# Reference: Seinfeld & Pandis (2016), Atmospheric Chemistry & Physics.
+
+_SCAVENGING_LAMBDA = 0.15      # exponential decay coefficient per mm/hr
+_WET_AQI_CEILING = 95          # strict AQI ceiling under active rain
+
+
+def _apply_wet_scavenging(
+    aqi_value: float,
+    precipitation_mm: float,
+    pollutant_readings: Optional[dict[str, Any]] = None,
+) -> tuple[float, Optional[dict[str, Any]], bool]:
+    """Apply exponential wet-scavenging to AQI and PM concentrations.
+
+    When rainfall is detected (> 0.1 mm/hr threshold), particulate-phase
+    pollutants (PM2.5 and PM10) are reduced by an exponential decay factor:
+
+        retention = exp(-lambda * precipitation_mm)
+
+    The resulting AQI is capped at a maximum strict ceiling of 95.
+
+    Args:
+        aqi_value: Raw AQI reading from the station.
+        precipitation_mm: Precipitation in the last hour (mm).
+        pollutant_readings: Optional dict of pollutant concentrations.
+
+    Returns:
+        Tuple of (effective_aqi, adjusted_readings, rain_active_flag).
+    """
+    # Rainfall detection threshold: 0.1 mm/hr (trace rainfall)
+    if precipitation_mm < 0.1:
+        return aqi_value, pollutant_readings, False
+
+    # Exponential decay: heavier rain -> stronger washout
+    retention_factor = math.exp(-_SCAVENGING_LAMBDA * precipitation_mm)
+    log.info(
+        "Wet-scavenging active: precip=%.1f mm/hr, retention_factor=%.4f",
+        precipitation_mm, retention_factor,
+    )
+
+    # Scale down particulate concentrations
+    adjusted_readings = None
+    if pollutant_readings:
+        adjusted_readings = dict(pollutant_readings)
+        for pm_key in ("pm25", "pm10"):
+            if pm_key in adjusted_readings and adjusted_readings[pm_key] is not None:
+                original = adjusted_readings[pm_key]
+                adjusted_readings[pm_key] = round(original * retention_factor, 2)
+                log.debug(
+                    "Wet-scavenging %s: %.2f -> %.2f (retention=%.4f)",
+                    pm_key, original, adjusted_readings[pm_key], retention_factor,
+                )
+
+    # Scale AQI by the same retention factor and enforce strict ceiling
+    effective_aqi = min(aqi_value * retention_factor, _WET_AQI_CEILING)
+    log.info(
+        "Wet-scavenging AQI: raw=%.1f -> effective=%.1f (ceiling=%d)",
+        aqi_value, effective_aqi, _WET_AQI_CEILING,
+    )
+
+    return effective_aqi, adjusted_readings, True
 
 # ============================================================
 # Geometry helpers — pure Python, no shapely dependency
@@ -533,6 +606,7 @@ def run_attribution(
     pasquill_class: str = "D",
     top_n: int = 4,
     pollutant_readings: Optional[dict[str, Any]] = None,
+    precipitation_mm_last_1h: float = 0.0,
 ) -> dict[str, Any]:
     """Run the three-stage attribution funnel and return the lower-half payload dict.
 
@@ -564,6 +638,18 @@ def run_attribution(
                     warnings.append(f"Invalid {p_name}: {p_check.reason}")
                 elif p_check.reason:
                     warnings.append(f"{p_name}: {p_check.reason}")
+
+    # ---- Wet-scavenging physics (rainfall wash-out) ----------------------
+    rain_active = False
+    if precipitation_mm_last_1h > 0.0:
+        aqi_value, pollutant_readings, rain_active = _apply_wet_scavenging(
+            aqi_value, precipitation_mm_last_1h, pollutant_readings,
+        )
+        if rain_active:
+            warnings.append(
+                f"Wet-scavenging applied: {precipitation_mm_last_1h:.1f} mm/hr rainfall "
+                f"detected. PM concentrations and AQI reduced by exponential wash-out model."
+            )
 
     # Gather total source count from DB for auditing
     total_sources = session.query(PollutionSource).count()

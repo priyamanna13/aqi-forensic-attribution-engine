@@ -356,6 +356,7 @@ def run_attribution_endpoint(
         wind_speed_kmh=float(weather["wind_speed_kmh"]),
         pasquill_class=weather["atmospheric_stability"]["pasquill_class"],
         pollutant_readings=values,
+        precipitation_mm_last_1h=float(weather.get("precipitation_mm_last_1h", 0.0)),
     )
 
     # ---- merge into full contract payload ----------------------------------
@@ -574,13 +575,30 @@ def trigger_simulated_spike(
 @app.websocket("/api/v1/simulation/ws")
 @app.websocket("/api/v1/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
+    # ---- Handshake diagnostic logging ------------------------------------
+    origin = websocket.headers.get("origin")
+    log.info(
+        "Received WebSocket connection attempt: client=%s, origin=%s, path=%s",
+        websocket.client, origin, websocket.url.path,
+    )
+
     await manager.connect(websocket)
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
-    except Exception:
+        log.info(
+            "WebSocket client gracefully disconnected: client=%s, path=%s",
+            websocket.client, websocket.url.path,
+        )
+    except Exception as exc:
+        log.error(
+            "WebSocket connection error: client=%s, path=%s, error=%s",
+            websocket.client, websocket.url.path, exc, exc_info=True,
+        )
+    finally:
+        # Deterministic cleanup — prevents orphan socket descriptors and
+        # leaked connection state memory buffers.
         manager.disconnect(websocket)
 
 
