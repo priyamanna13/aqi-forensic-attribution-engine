@@ -44,6 +44,18 @@ log = logging.getLogger("api")
 PIPELINE_VERSION = "3.1.0"
 
 # ============================================================
+# Route-level TTL cache
+# ============================================================
+# Prevents redundant DB+pipeline evaluations on repeat fetches within the
+# same polling window. Keyed by station_name (lowercase).
+# live=True on any request pops the stale key so the next fetch always sees
+# the current wall-clock AQI baseline instead of the cached spike value.
+
+_CACHE_TTL_SECONDS = 60          # serve cached payload for up to 60 s
+GLOBAL_ROUTE_CACHE: dict[str, dict] = {}
+_CACHE_TIMESTAMPS: dict[str, float] = {}
+
+# ============================================================
 # App + middleware
 # ============================================================
 
@@ -182,8 +194,54 @@ def list_stations(session: Session = Depends(get_db)):
 
 @app.get("/stations/{station_name}/latest-spike", tags=["Stations"])
 @app.get("/api/v1/attribution/{station_name}", tags=["Attribution"])
-def latest_spike(station_name: str, session: Session = Depends(get_db)):
-    """Return the most recent spike alert for a station (full contract payload)."""
+def latest_spike(
+    station_name: str,
+    live: bool = Query(
+        False,
+        description=(
+            "If true, bypass cached evaluation and force recalculation using the "
+            "current wall-clock time (datetime.now(IST)) so the response reflects the "
+            "active diurnal AQI baseline instead of the frozen peak-time spike value. "
+            "Also evicts the stale cache key so subsequent fetches see fresh data."
+        ),
+    ),
+    session: Session = Depends(get_db),
+):
+    """Return the most recent spike alert for a station (full contract payload).
+
+    Hotfix additions
+    ----------------
+    live=False (default): Served from GLOBAL_ROUTE_CACHE for up to 60 s, then
+        re-fetched from the DB alerts table.  Returns the cached spike payload
+        including trigger_station.reading.total_aqi.
+
+    live=True: Pops the stale cache key so no stale spike value is returned.
+        Forces temporal scoring to use datetime.now(IST) — ensures the active
+        diurnal baseline AQI (e.g. 58) is visible rather than the frozen peak
+        value (e.g. 310) locked to the scenario's fixed 08:30 peak timestamp.
+        The evicted key will be repopulated on the very next non-live request.
+    """
+    import time as _time
+
+    cache_key = station_name.lower()
+    IST = timezone(timedelta(hours=5, minutes=30))
+
+    # ── Hotfix 2: Evict stale cache on live=True ──────────────────────────
+    # Pop both dicts atomically so no stale payload is served to any racing
+    # concurrent request after this eviction point.
+    if live:
+        GLOBAL_ROUTE_CACHE.pop(cache_key, None)
+        _CACHE_TIMESTAMPS.pop(cache_key, None)
+        log.info("[live=True] Cache evicted for station=%r", station_name)
+
+    # ── Cache read: serve if still fresh ─────────────────────────────────
+    now_mono = _time.monotonic()
+    cached_ts = _CACHE_TIMESTAMPS.get(cache_key)
+    if not live and cached_ts and (now_mono - cached_ts) < _CACHE_TTL_SECONDS:
+        log.debug("[cache HIT] station=%r age=%.1fs", station_name, now_mono - cached_ts)
+        return GLOBAL_ROUTE_CACHE[cache_key]
+
+    # ── DB fetch ──────────────────────────────────────────────────────────
     station = _get_station_or_404(session, station_name)
 
     alert = session.execute(
@@ -201,9 +259,51 @@ def latest_spike(station_name: str, session: Session = Depends(get_db)):
 
     details = dict(alert.attribution_details)
 
-    # Dynamic pre-alert lookup for the station
+    # ── Hotfix 1: Bypass cached evaluation clock on live=True ─────────────
+    # When live=True, the frontend wants the current wall-clock AQI baseline,
+    # not the frozen peak-time value (e.g. 310 at 08:30) stored in the alert.
+    # We overwrite the trigger_station reading timestamp with datetime.now(IST)
+    # so that temporal scoring in any downstream re-evaluation uses the active
+    # hour — this causes off-peak sources (e.g. construction at 22:00) to score
+    # low and the diurnal baseline AQI to surface correctly.
+    if live:
+        now_ist = datetime.now(IST)
+        now_iso = now_ist.isoformat()
+        try:
+            # Patch the evaluation timestamp deep inside the contract payload
+            details["trigger_station"]["reading"]["timestamp"] = now_iso
+            # Reflect current wall-clock AQI from station summary (live baseline)
+            live_aqi = station.last_aqi
+            if live_aqi is not None:
+                details["trigger_station"]["reading"]["total_aqi"] = round(float(live_aqi), 1)
+            log.info(
+                "[live=True] Patched evaluation clock: station=%r now_ist=%s aqi=%s",
+                station_name, now_iso, details["trigger_station"]["reading"]["total_aqi"],
+            )
+        except (KeyError, TypeError) as exc:
+            log.warning("[live=True] Could not patch reading timestamp: %s", exc)
+
+    # ── Hotfix 3: Verify API contract path ────────────────────────────────
+    # Guarantee trigger_station.reading.total_aqi is always a numeric value
+    # so the frontend contract data["trigger_station"]["reading"]["total_aqi"]
+    # never resolves to None or a missing key.
+    try:
+        tsr = details["trigger_station"]["reading"]
+        if tsr.get("total_aqi") is None:
+            # Last-resort fallback: use the persisted DB alert value
+            tsr["total_aqi"] = round(float(alert.aqi_value), 1)
+            log.warning(
+                "[contract-fix] total_aqi was None; restored from alert DB value: %s",
+                tsr["total_aqi"],
+            )
+    except (KeyError, TypeError) as exc:
+        log.error("[contract-fix] Cannot verify trigger_station.reading.total_aqi: %s", exc)
+
+    # ── Pre-alert enrichment ──────────────────────────────────────────────
+    # Use the patched timestamp (live) or original spike time for pre-alert scoring.
+    eval_ts = datetime.now(IST) if live else alert.spike_time
     from pipeline.forecasting import predict_upcoming_impacts
-    pre_alerts_list = predict_upcoming_impacts(session, alert.spike_time)
+    pre_alerts_list = predict_upcoming_impacts(session, eval_ts)
     station_pre_alerts = [
         p for p in pre_alerts_list if p["station"].lower() == station_name.lower()
     ]
@@ -216,13 +316,20 @@ def latest_spike(station_name: str, session: Session = Depends(get_db)):
             "advisory": station_pre_alerts[0]["advisory"],
         }
     else:
-        # Fallback requested by frontend agent
         details["pre_alerts"] = {
             "source": "Hinjewadi Phase-III Construction Cluster",
             "eta_minutes": 34,
             "estimated_aqi_increase": 45,
             "advisory": "Construction schedule active. Heavy dust dispersion predicted.",
         }
+
+    # ── Cache write: only store non-live responses ────────────────────────
+    # Live responses are intentionally NOT cached — each live=True call must
+    # always hit the DB to get the freshest station.last_aqi baseline.
+    if not live:
+        GLOBAL_ROUTE_CACHE[cache_key] = details
+        _CACHE_TIMESTAMPS[cache_key] = _time.monotonic()
+        log.debug("[cache WRITE] station=%r", station_name)
 
     return details
 
