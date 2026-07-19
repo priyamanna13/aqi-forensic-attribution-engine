@@ -104,10 +104,18 @@ class CPCBPoller:
 
         pollutants = {}
         for r in matching_recs:
-            pid = r.get("pollutant_id", "").upper().replace(".", "")  # PM2.5 -> PM25
-            val_str = r.get("avg_value") or r.get("max_value") or r.get("min_value")
+            pid = r.get("pollutant_id", "").upper().replace(".", "").replace("_", "")  # PM2.5 -> PM25
+            # CPCB endpoint has returned both field names across versions:
+            #   avg_value  — primary field (older schema)
+            #   pollutant_avg — alternate field key (newer schema, identified by teammate)
+            val_str = (
+                r.get("avg_value")
+                or r.get("pollutant_avg")
+                or r.get("max_value")
+                or r.get("min_value")
+            )
             try:
-                if val_str and str(val_str).upper() != "NA":
+                if val_str and str(val_str).upper() not in ("NA", "None", ""):
                     pollutants[pid] = float(val_str)
             except (ValueError, TypeError):
                 pass
