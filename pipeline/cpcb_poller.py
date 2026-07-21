@@ -51,7 +51,7 @@ class CPCBPoller:
 
         self.stations = self.config.get("stations", [])
         self.api_key = (os.getenv("CPCB_API_KEY") or "").strip()
-        self.timeout = float(os.getenv("CPCB_API_TIMEOUT", "10"))
+        self.timeout = float(os.getenv("CPCB_API_TIMEOUT", "1.5"))
         self._session = requests.Session()
 
     def _fetch_live_waqi(self, lat: float, lon: float, station_name: str) -> Optional[dict[str, Any]]:

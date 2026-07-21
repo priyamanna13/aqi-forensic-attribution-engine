@@ -917,6 +917,8 @@ export default function App() {
     };
 
     // Immediate first fetch on station switch
+    spikeActiveRef.current = false;
+    setSpikeActive(false);
     setLoading(true);
     setActiveSource(null);
     setCurrentHourIndex(23);
