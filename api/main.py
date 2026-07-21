@@ -253,14 +253,21 @@ def latest_spike(
     ).scalars().first()
 
     if alert is not None:
-        # If live=True, only return the alert if it is fresh (within the last 5 minutes).
-        # This prevents old historical/simulated alerts from overriding the active live telemetry.
-        now_ist = datetime.now(IST)
-        alert_time = alert.spike_time
-        if alert_time.tzinfo is None:
-            alert_time = alert_time.replace(tzinfo=IST)
-        if live and (now_ist - alert_time).total_seconds() > 300:
+        details = dict(alert.attribution_details)
+        # If live=True, we ignore any simulated alerts completely to prevent them
+        # from contaminating the live telemetry dashboard.
+        # We also check freshness for real alerts (within the last 5 minutes).
+        is_simulated_alert = details.get("is_simulated", False)
+        
+        if live and is_simulated_alert:
             alert = None
+        else:
+            now_ist = datetime.now(IST)
+            alert_time = alert.spike_time
+            if alert_time.tzinfo is None:
+                alert_time = alert_time.replace(tzinfo=IST)
+            if live and (now_ist - alert_time).total_seconds() > 300:
+                alert = None
 
     if alert is None:
         # Construct baseline payload representing normal conditions:
@@ -475,6 +482,7 @@ def list_alerts(
 def run_attribution_endpoint(
     body: AttributionRequest,
     session: Session = Depends(get_db),
+    is_simulated: bool = False,
 ):
     """Run the full detection + attribution pipeline on a live reading.
 
@@ -576,6 +584,8 @@ def run_attribution_endpoint(
 
     # ---- merge into full contract payload ----------------------------------
     full_payload = {**top_half, **lower_half}
+    if is_simulated:
+        full_payload["is_simulated"] = True
 
     # ---- persist alert -----------------------------------------------------
     _persist_alert(session, station, full_payload)
@@ -779,7 +789,7 @@ def wind_cone(
 @app.post("/api/v1/simulation/trigger-spike", tags=["Simulation"], status_code=status.HTTP_201_CREATED)
 def trigger_simulated_spike(
     station_name: str = Query("Shivajinagar", description="Station name to simulate spike on"),
-    aqi: float = Query(310.0, description="Simulated total AQI"),
+    aqi: float = Query(310.0, alias="spike_aqi", description="Simulated total AQI"),
     pm10: float = Query(250.0, description="Simulated PM10"),
     pm25: float = Query(180.0, description="Simulated PM2.5"),
     no2: float = Query(85.0, description="Simulated NO2"),
@@ -801,7 +811,7 @@ def trigger_simulated_spike(
         so2=so2,
         timestamp=datetime.now(IST).isoformat(),
     )
-    return run_attribution_endpoint(req, session)
+    return run_attribution_endpoint(req, session, is_simulated=True)
 
 
 # ============================================================

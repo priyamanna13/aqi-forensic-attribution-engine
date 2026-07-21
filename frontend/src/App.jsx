@@ -1449,6 +1449,38 @@ export default function App() {
       <div className="sidebar">
         <div className="sidebar-scroll">
 
+          {/* Telemetry Loader Banner */}
+          {(connectionStatus === 'refreshing' || spikeLoading) && (
+            <div style={{
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.25)',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              fontSize: '11px',
+              color: '#60a5fa',
+              fontWeight: 600,
+              fontFamily: 'monospace',
+              letterSpacing: '0.05em',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            }}>
+              <span className="spinner" style={{
+                display: 'inline-block',
+                width: '12px',
+                height: '12px',
+                border: '2px solid currentColor',
+                borderTopColor: 'transparent',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite'
+              }}/>
+              FETCHING LIVE TELEMETRY... PLEASE WAIT
+            </div>
+          )}
+
           {/* Header */}
           <div className="header-row">
             <div style={{ flex: 1 }}>
