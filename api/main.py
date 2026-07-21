@@ -275,8 +275,31 @@ def latest_spike(
         from pipeline.pasquill import wind_direction_cardinal
         import uuid
 
+        lon, lat = _station_coords(session, station)
+
+        # Trigger an on-demand live fetch if live=True to ensure real-time values are served
+        if live:
+            from pipeline.cpcb_poller import CpcbPoller
+            poller = CpcbPoller()
+            station_cfg = {
+                "name": station.name,
+                "cpcb_station_id": "",
+                "lat": lat,
+                "lon": lon
+            }
+            cfg = _get_city_config()
+            for s in cfg.get("stations", []):
+                if s["name"].lower() == station.name.lower():
+                    station_cfg["cpcb_station_id"] = s.get("cpcb_station_id", "")
+                    break
+            try:
+                poller.fetch_station_reading(station_cfg, session)
+                session.commit()
+            except Exception as exc:
+                log.warning("On-demand live fetch failed for %s: %s", station.name, exc)
+
         # 1. Fetch latest reading
-        reading_row = session.execute(
+        latest_reading = session.execute(
             select(AqiReading)
             .where(AqiReading.station_id == str(station.id))
             .order_by(AqiReading.timestamp.desc())
@@ -294,7 +317,7 @@ def latest_spike(
         now_ist = datetime.now(IST)
         now_iso = now_ist.isoformat()
 
-        aqi_val = float(reading_row.aqi) if reading_row else (station.last_aqi or 50.0)
+        aqi_val = float(latest_reading.aqi) if latest_reading else (station.last_aqi or 50.0)
         if live:
             aqi_val = float(station.last_aqi or aqi_val)
 
