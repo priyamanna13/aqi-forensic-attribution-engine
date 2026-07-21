@@ -54,12 +54,27 @@ class CPCBPoller:
         self.timeout = float(os.getenv("CPCB_API_TIMEOUT", "10"))
         self._session = requests.Session()
 
-    def _fetch_live_waqi(self, lat: float, lon: float) -> Optional[dict[str, Any]]:
-        """Fetch real-time data from WAQI API for given coordinates."""
+    def _fetch_live_waqi(self, lat: float, lon: float, station_name: str) -> Optional[dict[str, Any]]:
+        """Fetch real-time data from WAQI API using exact station UIDs mapping."""
         waqi_key = (os.getenv("WAQI_API_KEY") or "").strip()
         if not waqi_key:
             return None
-        url = f"https://api.waqi.info/feed/geo:{lat};{lon}/"
+
+        # Map Pune station names to their exact WAQI UIDs to ensure distinct real-time readings
+        WAQI_STATION_MAP = {
+            "shivajinagar": "@14120",
+            "swargate": "@14122",
+            "hadapsar": "@14121",
+            "kothrud": "@14123"
+        }
+
+        station_key = station_name.lower().strip()
+        uid = WAQI_STATION_MAP.get(station_key)
+        if uid:
+            url = f"https://api.waqi.info/feed/{uid}/"
+        else:
+            url = f"https://api.waqi.info/feed/geo:{lat};{lon}/"
+
         try:
             resp = self._session.get(url, params={"token": waqi_key}, timeout=self.timeout)
             if resp.status_code == 200:
@@ -69,14 +84,15 @@ class CPCBPoller:
                     aqi = data.get("aqi")
                     iaqi = data.get("iaqi", {})
                     
-                    # Extract pollutant readings
+                    # Convert WAQI's US EPA sub-index readings back to raw concentrations
+                    # so we can compute mathematically precise Indian CPCB AQI values.
                     pollutants = {
-                        "pm25": iaqi.get("pm25", {}).get("v"),
-                        "pm10": iaqi.get("pm10", {}).get("v"),
-                        "no2": iaqi.get("no2", {}).get("v"),
-                        "so2": iaqi.get("so2", {}).get("v"),
-                        "co": iaqi.get("co", {}).get("v"),
-                        "o3": iaqi.get("o3", {}).get("v"),
+                        "pm25": us_aqi_to_concentration("pm25", iaqi.get("pm25", {}).get("v")) if iaqi.get("pm25") else None,
+                        "pm10": us_aqi_to_concentration("pm10", iaqi.get("pm10", {}).get("v")) if iaqi.get("pm10") else None,
+                        "no2": us_aqi_to_concentration("no2", iaqi.get("no2", {}).get("v")) if iaqi.get("no2") else None,
+                        "so2": us_aqi_to_concentration("so2", iaqi.get("so2", {}).get("v")) if iaqi.get("so2") else None,
+                        "co": us_aqi_to_concentration("co", iaqi.get("co", {}).get("v")) if iaqi.get("co") else None,
+                        "o3": us_aqi_to_concentration("o3", iaqi.get("o3", {}).get("v")) if iaqi.get("o3") else None,
                     }
                     
                     return {
@@ -84,7 +100,7 @@ class CPCBPoller:
                         "pollutants": pollutants
                     }
         except Exception as e:
-            log.warning("WAQI fetch failed: %s", e)
+            log.warning("WAQI fetch failed for %s: %s", station_name, e)
         return None
 
     def fetch_station_reading(self, station_cfg: dict[str, Any], session: Session) -> dict[str, Any]:
@@ -100,9 +116,9 @@ class CPCBPoller:
         # 1. Fetch from WAQI (if coordinates available)
         if lat is not None and lon is not None:
             try:
-                waqi_data = self._fetch_live_waqi(lat, lon)
+                waqi_data = self._fetch_live_waqi(lat, lon, station_name)
                 if waqi_data:
-                    log.info("WAQI fetch succeeded for %s. AQI: %s", station_name, waqi_data["aqi"])
+                    log.info("WAQI fetch succeeded for %s. Raw AQI: %s", station_name, waqi_data["aqi"])
             except Exception as exc:
                 log.warning("WAQI fetch failed for %s: %s", station_name, exc)
 
@@ -520,3 +536,86 @@ def calculate_indian_aqi(pollutants: dict[str, float | None]) -> float:
     if not sub_indices:
         return 50.0
     return float(round(max(sub_indices), 1))
+
+
+def us_aqi_to_concentration(pollutant: str, aqi: Optional[float]) -> Optional[float]:
+    """Convert US EPA AQI sub-index value back to raw physical concentration."""
+    if aqi is None:
+        return None
+    
+    pollutant = pollutant.lower()
+    if pollutant == "pm25":
+        if aqi <= 50:
+            return (aqi / 50.0) * 12.0
+        elif aqi <= 100:
+            return 12.0 + ((aqi - 50.0) / 50.0) * (35.4 - 12.0)
+        elif aqi <= 150:
+            return 35.4 + ((aqi - 100.0) / 50.0) * (55.4 - 35.4)
+        elif aqi <= 200:
+            return 55.4 + ((aqi - 150.0) / 50.0) * (150.4 - 55.4)
+        elif aqi <= 300:
+            return 150.4 + ((aqi - 200.0) / 100.0) * (250.4 - 150.4)
+        else:
+            return 250.4 + ((aqi - 300.0) / 200.0) * (500.4 - 250.4)
+            
+    elif pollutant == "pm10":
+        if aqi <= 50:
+            return (aqi / 50.0) * 54.0
+        elif aqi <= 100:
+            return 54.0 + ((aqi - 50.0) / 50.0) * (154.0 - 54.0)
+        elif aqi <= 150:
+            return 154.0 + ((aqi - 100.0) / 50.0) * (254.0 - 154.0)
+        elif aqi <= 200:
+            return 254.0 + ((aqi - 150.0) / 50.0) * (354.0 - 254.0)
+        elif aqi <= 300:
+            return 354.0 + ((aqi - 200.0) / 100.0) * (424.0 - 354.0)
+        else:
+            return 424.0 + ((aqi - 300.0) / 200.0) * (604.0 - 424.0)
+
+    elif pollutant == "co":
+        if aqi <= 50:
+            ppm = (aqi / 50.0) * 4.4
+        elif aqi <= 100:
+            ppm = 4.4 + ((aqi - 50.0) / 50.0) * (9.4 - 4.4)
+        elif aqi <= 150:
+            ppm = 9.4 + ((aqi - 100.0) / 50.0) * (12.4 - 9.4)
+        elif aqi <= 200:
+            ppm = 12.4 + ((aqi - 150.0) / 50.0) * (15.4 - 12.4)
+        else:
+            ppm = 15.4 + ((aqi - 200.0) / 100.0) * (30.4 - 15.4)
+        return ppm * 1.145
+
+    elif pollutant == "no2":
+        if aqi <= 50:
+            ppb = (aqi / 50.0) * 53.0
+        elif aqi <= 100:
+            ppb = 53.0 + ((aqi - 50.0) / 50.0) * (100.0 - 53.0)
+        elif aqi <= 150:
+            ppb = 100.0 + ((aqi - 100.0) / 50.0) * (360.0 - 100.0)
+        else:
+            ppb = 360.0 + ((aqi - 150.0) / 50.0) * (649.0 - 360.0)
+        return ppb * 1.88
+
+    elif pollutant == "so2":
+        if aqi <= 50:
+            ppb = (aqi / 50.0) * 35.0
+        elif aqi <= 100:
+            ppb = 35.0 + ((aqi - 50.0) / 50.0) * (75.0 - 35.0)
+        elif aqi <= 150:
+            ppb = 75.0 + ((aqi - 100.0) / 50.0) * (185.0 - 75.0)
+        else:
+            ppb = 185.0 + ((aqi - 150.0) / 50.0) * (304.0 - 185.0)
+        return ppb * 2.62
+
+    elif pollutant == "o3":
+        if aqi <= 50:
+            ppb = (aqi / 50.0) * 54.0
+        elif aqi <= 100:
+            ppb = 54.0 + ((aqi - 50.0) / 50.0) * (70.0 - 54.0)
+        elif aqi <= 150:
+            ppb = 70.0 + ((aqi - 100.0) / 50.0) * (85.0 - 70.0)
+        else:
+            ppb = 85.0 + ((aqi - 150.0) / 50.0) * (105.0 - 85.0)
+        return ppb * 1.96
+
+    return aqi
