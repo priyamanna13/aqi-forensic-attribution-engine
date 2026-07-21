@@ -82,7 +82,10 @@ STATIONS: list[StationSpec] = [
 # All coordinates are real Pune-area locations within ~5 km of the stations.
 # Geometry WKT is built with db.geo_utils helpers to keep it readable.
 # --------------------------------------------------------------------------
-from .geo_utils import linestring_wkt, point_wkt, polygon_wkt  # noqa: E402
+try:
+    from .geo_utils import linestring_wkt, point_wkt, polygon_wkt  # noqa: E402
+except ImportError:
+    from geo_utils import linestring_wkt, point_wkt, polygon_wkt  # noqa: E402
 
 SOURCES: list[SourceSpec] = [
     # ---- Construction (Polygons) — day shift 09:00–18:00 ------------------

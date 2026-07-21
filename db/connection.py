@@ -13,7 +13,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from . import config
+try:
+    from . import config
+except ImportError:
+    import config
 
 
 def _make_engine() -> Engine:

@@ -24,7 +24,8 @@ echo Waiting for database to accept connections...
 timeout /t 3 /nobreak > nul
 echo.
 
-echo [2/5] Running Database Migrations and Seeding Initial Pune Data...
+echo [2/5] Installing Python Dependencies and Seeding Initial Pune Data...
+python -m pip install -r requirements.txt
 python db/seed_data.py
 if %ERRORLEVEL% neq 0 (
     echo.

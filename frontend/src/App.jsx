@@ -1469,18 +1469,18 @@ export default function App() {
               {/* ── EMERGENCY SPIKE BUTTON ──
                   Only rendered when live feed has failed ≥ SPIKE_FAILURE_THRESHOLD polls.
                   Hidden completely during normal operation. */}
-              {showSpikeButton && !spikeActive && (
+              {!spikeActive && (
                 <button
                   id="spike-fallback-btn"
                   onClick={triggerSpike}
                   disabled={spikeLoading}
-                  title="Live feed is struggling — inject simulated data as emergency fallback"
+                  title="Trigger a simulated pollution spike for this station"
                   style={{
                     display: 'flex', alignItems: 'center', gap: 5,
                     padding: '5px 10px', borderRadius: 8,
-                    border: '1px solid rgba(251,146,60,0.45)',
-                    background: 'rgba(251,146,60,0.10)',
-                    color: '#fb923c',
+                    border: '1px solid rgba(239,68,68,0.45)',
+                    background: 'rgba(239,68,68,0.10)',
+                    color: '#ef4444',
                     fontSize: 10, fontWeight: 800, fontFamily: 'monospace',
                     letterSpacing: '0.05em', textTransform: 'uppercase',
                     cursor: spikeLoading ? 'wait' : 'pointer',
@@ -1494,7 +1494,7 @@ export default function App() {
                       Loading&hellip;
                     </>
                   ) : (
-                    <>⚡ Emergency Fallback</>
+                    <>⚡ Spike</>
                   )}
                 </button>
               )}
