@@ -175,6 +175,7 @@ def health():
 
 
 @app.get("/stations", tags=["Stations"])
+@app.get("/api/v1/stations", tags=["Stations"])
 def list_stations(session: Session = Depends(get_db)):
     """Return all seeded monitoring stations with their coordinates and last AQI."""
     stations = session.execute(select(Station)).scalars().all()
@@ -480,6 +481,7 @@ def run_attribution_endpoint(
 
 
 @app.get("/attribution/sources", tags=["Attribution"])
+@app.get("/api/v1/sources", tags=["Attribution"])
 def list_pollution_sources(session: Session = Depends(get_db)):
     """Return all pollution sources as a GeoJSON FeatureCollection."""
     from db.models import PollutionSource
