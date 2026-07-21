@@ -272,6 +272,53 @@ class WeatherClient:
         self.timeout = timeout
         self._session = session or requests.Session()
 
+    def _fetch_open_meteo(self, lat: float, lon: float) -> Optional[WeatherSnapshot]:
+        """Fetch current weather from Open-Meteo (free, no API key required)."""
+        url = "https://api.open-meteo.com/v1/forecast"
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,surface_pressure,precipitation",
+            "timezone": "auto"
+        }
+        try:
+            resp = self._session.get(url, params=params, timeout=self.timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                current = data.get("current", {})
+                
+                temp_c = current.get("temperature_2m", 25.0)
+                rh = current.get("relative_humidity_2m", 60.0)
+                wind_speed_kmh = current.get("wind_speed_10m", 0.0)
+                wind_direction_deg = current.get("wind_direction_10m", 0.0)
+                pressure_hpa = current.get("surface_pressure", 1013.25)
+                precip = current.get("precipitation", 0.0)
+                
+                # stability classification
+                from .pasquill import classify_stability, wind_direction_cardinal
+                from datetime import datetime, timezone, timedelta
+                IST = timezone(timedelta(hours=5, minutes=30))
+                now_ist = datetime.now(IST)
+                stability = classify_stability(wind_speed_kmh, now_ist.hour)
+                
+                return WeatherSnapshot(
+                    source="Open-Meteo",
+                    observed_at=now_ist,
+                    temperature_c=float(temp_c),
+                    relative_humidity_pct=float(rh),
+                    wind_speed_kmh=float(wind_speed_kmh),
+                    wind_direction_deg=float(wind_direction_deg),
+                    wind_direction_cardinal=wind_direction_cardinal(wind_direction_deg),
+                    pressure_hpa=float(pressure_hpa),
+                    precipitation_mm_last_1h=float(precip),
+                    atmospheric_stability=stability,
+                    mixing_layer_height_m=800,
+                    visibility_km=10.0,
+                )
+        except Exception as e:
+            log.warning("Open-Meteo request failed: %s", e)
+        return None
+
     def get_weather(
         self,
         lat: float,
@@ -279,19 +326,15 @@ class WeatherClient:
         *,
         source: str = "OpenWeatherMap",
     ) -> WeatherSnapshot:
-        """Return a weather snapshot, falling back to cache on any failure.
-
-        Order of operations:
-          1. If we have no API key, go straight to cache (offline mode).
-          2. Try a live OWM request; on success parse + write cache + return.
-          3. On any exception / non-2xx / 429, return the cached snapshot if
-             one exists; otherwise return a zero-wind fallback so the pipeline
-             never crashes for lack of weather data.
-        """
+        """Return a weather snapshot, falling back to Open-Meteo or cache on failure."""
         key = _cache_key(lat, lon)
 
         if not self.api_key:
-            log.info("OWM_API_KEY not set — using cached weather (offline mode).")
+            log.info("OWM_API_KEY not set — trying Open-Meteo fallback...")
+            om_snap = self._fetch_open_meteo(lat, lon)
+            if om_snap:
+                return om_snap
+            log.info("Open-Meteo failed — using cached weather (offline mode).")
             return self._snapshot_from_cache_or_fallback(
                 key, lat, lon, source=source
             )

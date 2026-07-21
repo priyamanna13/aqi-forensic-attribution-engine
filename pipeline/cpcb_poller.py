@@ -121,7 +121,6 @@ class CPCBPoller:
             now_ist = datetime.now(IST)
 
             # Default fallback structures
-            merged_aqi = 50.0
             merged_pollutants = {
                 "pm25": None, "pm10": None, "no2": None,
                 "so2": None, "co": None, "o3": None
@@ -129,22 +128,19 @@ class CPCBPoller:
 
             # Merge WAQI values first (high-quality real-time baseline)
             if waqi_data:
-                if waqi_data["aqi"] is not None:
-                    merged_aqi = waqi_data["aqi"]
                 for k, v in waqi_data["pollutants"].items():
                     if v is not None:
                         merged_pollutants[k] = v
 
             # Merge/Overlay with CPCB values
             if cpcb_data:
-                if not waqi_data and cpcb_data["aqi"] is not None:
-                    merged_aqi = cpcb_data["aqi"]
-                
                 # Check individual CPCB chemical concentrations
                 for p_key in ["pm25", "pm10", "no2", "so2", "co", "o3"]:
                     val = cpcb_data.get(p_key)
                     if val is not None:
                         merged_pollutants[p_key] = val
+
+            merged_aqi = calculate_indian_aqi(merged_pollutants)
 
             return {
                 "timestamp": now_ist,
@@ -419,3 +415,108 @@ class CPCBPoller:
                 session.close()
 
         return payloads
+
+
+def calculate_indian_aqi(pollutants: dict[str, float | None]) -> float:
+    """Calculate the official Indian CPCB National Air Quality Index (NAQI)."""
+    sub_indices = []
+
+    # PM2.5 breakpoints
+    pm25 = pollutants.get("pm25") or pollutants.get("PM25")
+    if pm25 is not None:
+        if pm25 <= 30:
+            sub_indices.append(pm25 * 50 / 30)
+        elif pm25 <= 60:
+            sub_indices.append(50 + (pm25 - 30) * 50 / 30)
+        elif pm25 <= 90:
+            sub_indices.append(100 + (pm25 - 60) * 100 / 30)
+        elif pm25 <= 120:
+            sub_indices.append(200 + (pm25 - 90) * 100 / 30)
+        elif pm25 <= 250:
+            sub_indices.append(300 + (pm25 - 120) * 100 / 130)
+        else:
+            sub_indices.append(400 + (pm25 - 250) * 100 / 100)
+
+    # PM10 breakpoints
+    pm10 = pollutants.get("pm10") or pollutants.get("PM10")
+    if pm10 is not None:
+        if pm10 <= 50:
+            sub_indices.append(pm10)
+        elif pm10 <= 100:
+            sub_indices.append(50 + (pm10 - 50) * 50 / 50)
+        elif pm10 <= 250:
+            sub_indices.append(100 + (pm10 - 100) * 100 / 150)
+        elif pm10 <= 350:
+            sub_indices.append(200 + (pm10 - 250) * 100 / 100)
+        elif pm10 <= 430:
+            sub_indices.append(300 + (pm10 - 350) * 100 / 80)
+        else:
+            sub_indices.append(400 + (pm10 - 430) * 100 / 100)
+
+    # NO2 breakpoints
+    no2 = pollutants.get("no2") or pollutants.get("NO2")
+    if no2 is not None:
+        if no2 <= 40:
+            sub_indices.append(no2 * 50 / 40)
+        elif no2 <= 80:
+            sub_indices.append(50 + (no2 - 40) * 50 / 40)
+        elif no2 <= 180:
+            sub_indices.append(100 + (no2 - 80) * 100 / 100)
+        elif no2 <= 280:
+            sub_indices.append(200 + (no2 - 180) * 100 / 100)
+        elif no2 <= 400:
+            sub_indices.append(300 + (no2 - 280) * 100 / 120)
+        else:
+            sub_indices.append(400 + (no2 - 400) * 100 / 100)
+
+    # SO2 breakpoints
+    so2 = pollutants.get("so2") or pollutants.get("SO2")
+    if so2 is not None:
+        if so2 <= 40:
+            sub_indices.append(so2 * 50 / 40)
+        elif so2 <= 80:
+            sub_indices.append(50 + (so2 - 40) * 50 / 40)
+        elif so2 <= 380:
+            sub_indices.append(100 + (so2 - 80) * 100 / 300)
+        elif so2 <= 800:
+            sub_indices.append(200 + (so2 - 380) * 100 / 420)
+        elif so2 <= 1600:
+            sub_indices.append(300 + (so2 - 800) * 100 / 800)
+        else:
+            sub_indices.append(400 + (so2 - 1600) * 100 / 800)
+
+    # CO breakpoints
+    co = pollutants.get("co") or pollutants.get("CO")
+    if co is not None:
+        if co <= 1.0:
+            sub_indices.append(co * 50)
+        elif co <= 2.0:
+            sub_indices.append(50 + (co - 1.0) * 50)
+        elif co <= 10.0:
+            sub_indices.append(100 + (co - 2.0) * 100 / 8.0)
+        elif co <= 17.0:
+            sub_indices.append(200 + (co - 10.0) * 100 / 7.0)
+        elif co <= 34.0:
+            sub_indices.append(300 + (co - 17.0) * 100 / 17.0)
+        else:
+            sub_indices.append(400 + (co - 34.0) * 100 / 10.0)
+
+    # O3 breakpoints
+    o3 = pollutants.get("o3") or pollutants.get("O3") or pollutants.get("OZONE")
+    if o3 is not None:
+        if o3 <= 50:
+            sub_indices.append(o3)
+        elif o3 <= 100:
+            sub_indices.append(50 + (o3 - 50) * 50 / 50)
+        elif o3 <= 168:
+            sub_indices.append(100 + (o3 - 100) * 100 / 68)
+        elif o3 <= 208:
+            sub_indices.append(200 + (o3 - 168) * 100 / 40)
+        elif o3 <= 748:
+            sub_indices.append(300 + (o3 - 208) * 100 / 540)
+        else:
+            sub_indices.append(400 + (o3 - 748) * 100 / 100)
+
+    if not sub_indices:
+        return 50.0
+    return float(round(max(sub_indices), 1))
