@@ -278,7 +278,7 @@ class WeatherClient:
         params = {
             "latitude": lat,
             "longitude": lon,
-            "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,surface_pressure,precipitation",
+            "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,surface_pressure,precipitation,cloud_cover",
             "timezone": "auto"
         }
         try:
@@ -293,6 +293,7 @@ class WeatherClient:
                 wind_direction_deg = current.get("wind_direction_10m", 0.0)
                 pressure_hpa = current.get("surface_pressure", 1013.25)
                 precip = current.get("precipitation", 0.0)
+                cloud_pct = current.get("cloud_cover", 0.0)
                 
                 # stability classification
                 from .pasquill import classify_stability, wind_direction_cardinal
@@ -301,19 +302,23 @@ class WeatherClient:
                 now_ist = datetime.now(IST)
                 stability = classify_stability(wind_speed_kmh, now_ist.hour)
                 
+                cloud_oktas = _to_oktas(cloud_pct)
+                mlh = _estimate_mixing_layer_height(stability, now_ist.hour, cloud_oktas)
+                
                 return WeatherSnapshot(
                     source="Open-Meteo",
-                    observed_at=now_ist,
+                    observed_at=now_ist.isoformat(),
                     temperature_c=float(temp_c),
                     relative_humidity_pct=float(rh),
                     wind_speed_kmh=float(wind_speed_kmh),
                     wind_direction_deg=float(wind_direction_deg),
                     wind_direction_cardinal=wind_direction_cardinal(wind_direction_deg),
                     pressure_hpa=float(pressure_hpa),
+                    cloud_cover_oktas=cloud_oktas,
                     precipitation_mm_last_1h=float(precip),
-                    atmospheric_stability=stability,
-                    mixing_layer_height_m=800,
                     visibility_km=10.0,
+                    mixing_layer_height_m=mlh,
+                    atmospheric_stability=_stability_to_dict(stability),
                 )
         except Exception as e:
             log.warning("Open-Meteo request failed: %s", e)

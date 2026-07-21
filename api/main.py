@@ -252,13 +252,118 @@ def latest_spike(
         .limit(1)
     ).scalars().first()
 
-    if alert is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No spike found for station: {station_name}",
-        )
+    if alert is not None:
+        # If live=True, only return the alert if it is fresh (within the last 5 minutes).
+        # This prevents old historical/simulated alerts from overriding the active live telemetry.
+        now_ist = datetime.now(IST)
+        alert_time = alert.spike_time
+        if alert_time.tzinfo is None:
+            alert_time = alert_time.replace(tzinfo=IST)
+        if live and (now_ist - alert_time).total_seconds() > 300:
+            alert = None
 
-    details = dict(alert.attribution_details)
+    if alert is None:
+        # Construct baseline payload representing normal conditions:
+        from db.models import AqiReading, WindData
+        from pipeline.pasquill import wind_direction_cardinal
+        import uuid
+
+        # 1. Fetch latest reading
+        reading_row = session.execute(
+            select(AqiReading)
+            .where(AqiReading.station_id == str(station.id))
+            .order_by(AqiReading.timestamp.desc())
+            .limit(1)
+        ).scalars().first()
+
+        # 2. Fetch latest wind data
+        wind_row = session.execute(
+            select(WindData)
+            .where(WindData.station_id == str(station.id))
+            .order_by(WindData.timestamp.desc())
+            .limit(1)
+        ).scalars().first()
+
+        now_ist = datetime.now(IST)
+        now_iso = now_ist.isoformat()
+
+        aqi_val = float(reading_row.aqi) if reading_row else (station.last_aqi or 50.0)
+        if live:
+            aqi_val = float(station.last_aqi or aqi_val)
+
+        wind_dir = float(wind_row.wind_direction_deg) if wind_row else 290.0
+        wind_spd = float(wind_row.wind_speed_kmh) if wind_row else 10.0
+        temp_val = float(wind_row.temperature) if (wind_row and wind_row.temperature) else 25.0
+
+        lon, lat = _station_coords(session, station)
+
+        details = {
+            "event_id": str(uuid.uuid4()),
+            "event_severity": "moderate" if aqi_val >= 100 else "normal",
+            "pipeline_version": PIPELINE_VERSION,
+            "generated_at": now_iso,
+            "trigger_station": {
+                "id": str(station.id),
+                "name": station.name,
+                "network": station.network or "CPCB_CAAQMS",
+                "city": "Pune",
+                "state": "Maharashtra",
+                "coordinates": [lon, lat],
+                "elevation_m": station.elevation_m or 560,
+                "reading": {
+                    "timestamp": now_iso,
+                    "total_aqi": round(aqi_val, 1),
+                    "aqi_category": "Moderate" if aqi_val >= 100 else "Satisfactory",
+                    "dominant_pollutant": "PM2.5",
+                    "chemical_fingerprint": {
+                        "so2_no2_ratio": 1.0,
+                        "pm25_pm10_ratio": 0.5,
+                        "signature_class": "mixed",
+                        "notes": "Ambient conditions are within nominal ranges."
+                    }
+                }
+            },
+            "weather_snapshot": {
+                "source": "OpenWeatherMap",
+                "observed_at": now_iso,
+                "pressure_hpa": 1010.0,
+                "temperature_c": temp_val,
+                "visibility_km": 10.0,
+                "wind_speed_kmh": wind_spd,
+                "wind_direction_deg": wind_dir,
+                "wind_direction_cardinal": wind_direction_cardinal(wind_dir),
+                "atmospheric_stability": {
+                    "pasquill_class": "D",
+                    "stability_label": "Neutral"
+                },
+                "mixing_layer_height_m": 800,
+                "relative_humidity_pct": 60.0,
+                "precipitation_mm_last_1h": 0.0
+            },
+            "wind_cone_geometry": None,
+            "ranked_candidates": [],
+            "actionable_intelligence": {
+                "enforcement_priority": 0.0,
+                "priority_justification": "Air quality is within normal limits. No enforcement actions required.",
+                "recommended_actions": [],
+                "localized_advisory": {
+                    "en": f"Air quality at {station.name} is currently satisfactory (AQI: {aqi_val:.0f}).",
+                    "hi": f"{station.name} पर वायु गुणवत्ता वर्तमान में संतोषजनक है (AQI: {aqi_val:.0f})।",
+                    "mr": f"{station.name} येथील हवेची गुणवत्ता सध्या समाधानकारक आहे (AQI: {aqi_val:.0f})."
+                },
+                "field_team_assignment": None,
+                "notification_channels": [],
+                "ambiguous": False
+            },
+            "pre_alerts": {
+                "source": "None",
+                "eta_minutes": 0,
+                "estimated_aqi_increase": 0,
+                "advisory": "Ambient conditions are normal. No upcoming pollution events predicted."
+            }
+        }
+    else:
+        details = dict(alert.attribution_details)
 
     # ── Hotfix 1: Bypass cached evaluation clock on live=True ─────────────
     # When live=True, the frontend wants the current wall-clock AQI baseline,
