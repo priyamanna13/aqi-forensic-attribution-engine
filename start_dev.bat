@@ -38,7 +38,7 @@ echo.
 
 echo [3/5] Starting FastAPI Backend Server on port 8000...
 :: Opens a new terminal window for the Python FastAPI server
-start "FastAPI Backend Server" cmd /k "title FastAPI Backend && uvicorn api.main:app --reload --port 8000"
+start "FastAPI Backend Server" cmd /k "title FastAPI Backend && python -m uvicorn api.main:app --reload --port 8000"
 
 :: Wait 2 seconds for backend to start up
 timeout /t 2 /nobreak > nul

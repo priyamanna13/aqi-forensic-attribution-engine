@@ -483,12 +483,35 @@ def run_attribution_endpoint(
 @app.get("/attribution/sources", tags=["Attribution"])
 @app.get("/api/v1/sources", tags=["Attribution"])
 def list_pollution_sources(session: Session = Depends(get_db)):
-    """Return all pollution sources as a GeoJSON FeatureCollection."""
+    """Return all pollution sources in a flat list compatible with map_layers.js."""
     from db.models import PollutionSource
-    from db.geo_utils import sources_to_geojson
+    from geoalchemy2.shape import to_shape
+    from geoalchemy2.elements import WKBElement
 
-    sources = session.execute(select(PollutionSource)).scalars().all()
-    return json.loads(sources_to_geojson(sources))
+    db_sources = session.execute(select(PollutionSource)).scalars().all()
+    
+    sources = []
+    for s in db_sources:
+        shape = to_shape(s.geom if isinstance(s.geom, WKBElement) else WKBElement(bytes(s.geom)))
+        geom_type = shape.geom_type
+        if geom_type == "Point":
+            geom_json = {"type": "Point", "coordinates": [shape.x, shape.y]}
+        elif geom_type == "LineString":
+            geom_json = {"type": "LineString", "coordinates": list(shape.coords)}
+        else:  # Polygon
+            geom_json = {"type": "Polygon", "coordinates": [list(shape.exterior.coords)]}
+
+        sources.append({
+            "id": str(s.id),
+            "name": s.name,
+            "source_type": s.type,
+            "type": s.type,
+            "source_origin": s.source_origin or "osm",
+            "geometry": geom_json,
+            "description": s.description or f"Pollution source ({s.type})",
+        })
+
+    return {"count": len(sources), "sources": sources}
 
 
 @app.get("/api/pre-alerts", tags=["Attribution"])
