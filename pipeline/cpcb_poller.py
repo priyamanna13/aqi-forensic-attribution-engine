@@ -40,7 +40,7 @@ DEFAULT_CONFIG_PATH = _PROJECT_ROOT / "city_config.yml"
 
 
 class CPCBPoller:
-    """Live CPCB CAAQMS poller and synthetic fallback engine."""
+    """Live CPCB and WAQI poller with synthetic fallback engine."""
 
     def __init__(self, config_path: Optional[Path] = None) -> None:
         path = config_path or Path(os.getenv("CITY_CONFIG", str(DEFAULT_CONFIG_PATH)))
@@ -54,21 +54,112 @@ class CPCBPoller:
         self.timeout = float(os.getenv("CPCB_API_TIMEOUT", "10"))
         self._session = requests.Session()
 
+    def _fetch_live_waqi(self, lat: float, lon: float) -> Optional[dict[str, Any]]:
+        """Fetch real-time data from WAQI API for given coordinates."""
+        waqi_key = (os.getenv("WAQI_API_KEY") or "").strip()
+        if not waqi_key:
+            return None
+        url = f"https://api.waqi.info/feed/geo:{lat};{lon}/"
+        try:
+            resp = self._session.get(url, params={"token": waqi_key}, timeout=self.timeout)
+            if resp.status_code == 200:
+                res_json = resp.json()
+                if res_json.get("status") == "ok":
+                    data = res_json.get("data", {})
+                    aqi = data.get("aqi")
+                    iaqi = data.get("iaqi", {})
+                    
+                    # Extract pollutant readings
+                    pollutants = {
+                        "pm25": iaqi.get("pm25", {}).get("v"),
+                        "pm10": iaqi.get("pm10", {}).get("v"),
+                        "no2": iaqi.get("no2", {}).get("v"),
+                        "so2": iaqi.get("so2", {}).get("v"),
+                        "co": iaqi.get("co", {}).get("v"),
+                        "o3": iaqi.get("o3", {}).get("v"),
+                    }
+                    
+                    return {
+                        "aqi": float(aqi) if aqi is not None else None,
+                        "pollutants": pollutants
+                    }
+        except Exception as e:
+            log.warning("WAQI fetch failed: %s", e)
+        return None
+
     def fetch_station_reading(self, station_cfg: dict[str, Any], session: Session) -> dict[str, Any]:
-        """GET latest reading for a station, falling back to synthetic data if needed."""
+        """GET latest reading for a station, merging live CPCB and WAQI data."""
         station_name = station_cfg["name"]
         cpcb_id = station_cfg.get("cpcb_station_id", "")
+        lat = station_cfg.get("lat")
+        lon = station_cfg.get("lon")
 
+        waqi_data = None
+        cpcb_data = None
+
+        # 1. Fetch from WAQI (if coordinates available)
+        if lat is not None and lon is not None:
+            try:
+                waqi_data = self._fetch_live_waqi(lat, lon)
+                if waqi_data:
+                    log.info("WAQI fetch succeeded for %s. AQI: %s", station_name, waqi_data["aqi"])
+            except Exception as exc:
+                log.warning("WAQI fetch failed for %s: %s", station_name, exc)
+
+        # 2. Fetch from CPCB (if key and cpcb_id available)
         if self.api_key and cpcb_id:
             try:
-                reading = self._fetch_live_cpcb(cpcb_id, station_name)
-                if reading:
-                    return reading
+                cpcb_data = self._fetch_live_cpcb(cpcb_id, station_name)
+                if cpcb_data:
+                    log.info("CPCB fetch succeeded for %s. AQI: %s", station_name, cpcb_data["aqi"])
             except Exception as exc:
-                log.warning("Live CPCB fetch failed for %s (%s); switching to synthetic engine.", station_name, exc)
-        else:
-            log.debug("No CPCB_API_KEY set; using synthetic telemetry for %s.", station_name)
+                log.warning("CPCB fetch failed for %s: %s", station_name, exc)
 
+        # 3. Merge data sources
+        if waqi_data or cpcb_data:
+            IST = timezone(timedelta(hours=5, minutes=30))
+            now_ist = datetime.now(IST)
+
+            # Default fallback structures
+            merged_aqi = 50.0
+            merged_pollutants = {
+                "pm25": None, "pm10": None, "no2": None,
+                "so2": None, "co": None, "o3": None
+            }
+
+            # Merge WAQI values first (high-quality real-time baseline)
+            if waqi_data:
+                if waqi_data["aqi"] is not None:
+                    merged_aqi = waqi_data["aqi"]
+                for k, v in waqi_data["pollutants"].items():
+                    if v is not None:
+                        merged_pollutants[k] = v
+
+            # Merge/Overlay with CPCB values
+            if cpcb_data:
+                if not waqi_data and cpcb_data["aqi"] is not None:
+                    merged_aqi = cpcb_data["aqi"]
+                
+                # Check individual CPCB chemical concentrations
+                for p_key in ["pm25", "pm10", "no2", "so2", "co", "o3"]:
+                    val = cpcb_data.get(p_key)
+                    if val is not None:
+                        merged_pollutants[p_key] = val
+
+            return {
+                "timestamp": now_ist,
+                "aqi": float(round(merged_aqi, 1)),
+                "pm25": merged_pollutants["pm25"],
+                "pm10": merged_pollutants["pm10"],
+                "no2": merged_pollutants["no2"],
+                "so2": merged_pollutants["so2"],
+                "co": merged_pollutants["co"],
+                "o3": merged_pollutants["o3"],
+                "synthetic": False,
+            }
+
+        # 4. Fallback to synthetic if both failed
+        log.warning("Both WAQI and CPCB failed for %s; using synthetic telemetry.", station_name)
         return self._generate_synthetic_reading(station_cfg, session)
 
     def _fetch_live_cpcb(self, cpcb_id: str, station_name: str) -> Optional[dict[str, Any]]:
