@@ -279,8 +279,8 @@ def latest_spike(
 
         # Trigger an on-demand live fetch if live=True to ensure real-time values are served
         if live:
-            from pipeline.cpcb_poller import CpcbPoller
-            poller = CpcbPoller()
+            from pipeline.cpcb_poller import CPCBPoller
+            poller = CPCBPoller()
             station_cfg = {
                 "name": station.name,
                 "cpcb_station_id": "",
