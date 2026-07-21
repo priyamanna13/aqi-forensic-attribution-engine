@@ -296,6 +296,8 @@ def latest_spike(
         temp_val = float(wind_row.temperature) if (wind_row and wind_row.temperature) else 25.0
 
         lon, lat = _station_coords(session, station)
+        from pipeline.station_meta import get_station_meta
+        meta = get_station_meta(station.name)
 
         details = {
             "event_id": str(uuid.uuid4()),
@@ -305,11 +307,11 @@ def latest_spike(
             "trigger_station": {
                 "id": str(station.id),
                 "name": station.name,
-                "network": station.network or "CPCB_CAAQMS",
-                "city": "Pune",
-                "state": "Maharashtra",
+                "network": meta.network if meta else "CPCB_CAAQMS",
+                "city": meta.city if meta else "Pune",
+                "state": meta.state if meta else "Maharashtra",
                 "coordinates": [lon, lat],
-                "elevation_m": station.elevation_m or 560,
+                "elevation_m": meta.elevation_m if meta else 560,
                 "reading": {
                     "timestamp": now_iso,
                     "total_aqi": round(aqi_val, 1),

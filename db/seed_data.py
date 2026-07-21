@@ -23,6 +23,9 @@ Re-running is safe and prints a clear summary of what changed.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import time
 from dataclasses import dataclass
 from datetime import time as dtime
@@ -70,10 +73,10 @@ class SourceSpec:
 # Pune stations (spec coords)
 # --------------------------------------------------------------------------
 STATIONS: list[StationSpec] = [
-    StationSpec("Shivajinagar", 73.8440, 18.5308),
-    StationSpec("Hadapsar",     73.9268, 18.5089),
-    StationSpec("Katraj",       73.8567, 18.4575),
-    StationSpec("Karve Road",   73.8290, 18.5074),
+    StationSpec("Shivajinagar", 73.8567, 18.5308),
+    StationSpec("Swargate",     73.8553, 18.5018),
+    StationSpec("Hadapsar",     73.9260, 18.5089),
+    StationSpec("Kothrud",      73.8077, 18.5074),
 ]
 
 
@@ -252,6 +255,11 @@ def seed_stations() -> int:
         for s in STATIONS
     ]
     with engine.begin() as conn:
+        # Clean up outdated station rows not present in current configurations
+        from sqlalchemy import delete
+        valid_names = [s.name for s in STATIONS]
+        conn.execute(delete(Station).where(Station.name.not_in(valid_names)))
+
         for row in rows:
             stmt = (
                 pg_insert(Station)
@@ -280,6 +288,10 @@ def seed_sources() -> int:
         for s in SOURCES
     ]
     with engine.begin() as conn:
+        # Clean up outdated source rows not present in current configurations
+        from sqlalchemy import delete
+        valid_names = [s.name for s in SOURCES]
+        conn.execute(delete(PollutionSource).where(PollutionSource.name.not_in(valid_names)))
         for row in rows:
             stmt = (
                 pg_insert(PollutionSource)
