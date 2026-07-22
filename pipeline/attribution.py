@@ -734,7 +734,13 @@ def run_attribution(
             "— falling back to proximity-ranked results for station %s",
             wind_direction_deg, half_angle, spatial_count, station_name,
         )
-        in_cone = nearby[:top_n]
+        # CRITICAL: _filter_by_wind_cone returns (src, lon, lat) tuples.
+        # We must build the same structure here so the scoring loop can unpack correctly.
+        fallback_tuples = []
+        for src in nearby[:top_n]:
+            src_lon, src_lat = _source_representative_point(src, session)
+            fallback_tuples.append((src, src_lon, src_lat))
+        in_cone = fallback_tuples
         warnings.append(
             f"Wind direction data uncertain — showing {len(in_cone)} nearest "
             "sources by proximity rather than strict upwind filtering."
