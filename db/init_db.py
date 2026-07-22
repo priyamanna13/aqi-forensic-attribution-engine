@@ -38,7 +38,8 @@ SCHEMA_FILE = Path(__file__).resolve().parent / "schema.sql"
 
 
 def _execute_schema_sql() -> None:
-    """Run schema.sql via psycopg2's execute() on the raw connection."""
+    """Run schema.sql directly via SQLAlchemy text to ensure proper transaction commit."""
+    from sqlalchemy import text
     raw_sql = SCHEMA_FILE.read_text(encoding="utf-8")
     
     # Strip out the CREATE EXTENSION lines so we can run them separately
@@ -48,35 +49,28 @@ def _execute_schema_sql() -> None:
             filtered_sql.append(line)
     safe_sql = "\n".join(filtered_sql)
 
-    with engine.connect() as conn:
-        dbapi_conn = conn.connection
-        
-        # 1. Run Extensions outside of transaction
-        dbapi_conn.autocommit = True
+    # 1. Run Extensions outside of transaction (AUTOCOMMIT)
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         try:
-            with dbapi_conn.cursor() as cur:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+        except Exception as e:
+            print("PostGIS extension creation skipped/failed:", e)
+        try:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto;"))
+        except Exception:
+            pass
+
+    # 2. Run tables/indexes inside transaction
+    with engine.begin() as conn:
+        conn.execute(text(safe_sql))
+        # Ensure trailing migrations run
+        for line in safe_sql.splitlines():
+            line_str = line.strip()
+            if line_str.startswith("ALTER TABLE") or line_str.startswith("CREATE INDEX"):
                 try:
-                    cur.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
+                    conn.execute(text(line_str))
                 except Exception:
                     pass
-                try:
-                    cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
-                except Exception:
-                    pass
-        finally:
-            dbapi_conn.autocommit = False
-            
-        # 2. Run tables/indexes inside transaction
-        with dbapi_conn.cursor() as cur:
-            cur.execute(safe_sql)
-            for line in safe_sql.splitlines():
-                line_str = line.strip()
-                if line_str.startswith("ALTER TABLE") or line_str.startswith("CREATE INDEX"):
-                    try:
-                        cur.execute(line_str)
-                    except Exception:
-                        pass
-        conn.commit()
 
 
 def _verify_tables() -> dict[str, bool]:
