@@ -576,12 +576,12 @@ def run_attribution_endpoint(
     # ---- run spike detector ------------------------------------------------
     detector = SpikeDetector()
     top_half = detector.check_and_trigger_spike(
-        session, str(station.id), reading
+        session, str(station.id), reading, force_payload=True
     )
 
     if top_half is None:
+        # Should no longer happen with force_payload=True, but keep for safety
         session.commit()
-        # Return 200 OK (not 201) for no-spike
         from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=status.HTTP_200_OK,

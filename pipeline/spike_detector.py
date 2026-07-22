@@ -352,8 +352,9 @@ class SpikeDetector:
         session: Session,
         station_id: str,
         current_reading: dict[str, Any],
+        force_payload: bool = False,
     ) -> Optional[dict[str, Any]]:
-        """Evaluate one reading; return a payload if a spike fired, else None.
+        """Evaluate one reading; return a payload if a spike fired (or if forced), else None.
 
         ``current_reading`` shape::
 
@@ -384,7 +385,7 @@ class SpikeDetector:
         gap_seconds = (ts - prev.timestamp).total_seconds() if prev else None
 
         detection = evaluate_rules(total_aqi, values, prev_aqi, gap_seconds)
-        if not detection.triggered:
+        if not detection.triggered and not force_payload:
             return None
 
         lon, lat = _station_coordinates(session, station)
