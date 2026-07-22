@@ -347,7 +347,11 @@ class WeatherClient:
         try:
             payload = self._fetch_live(lat, lon)
         except Exception as exc:
-            log.warning("OWM request failed (%s); falling back to cache.", exc)
+            log.warning("OWM request failed (%s); trying Open-Meteo fallback.", exc)
+            om_snap = self._fetch_open_meteo(lat, lon)
+            if om_snap:
+                return om_snap
+            log.warning("Open-Meteo fallback failed; falling back to cache.")
             return self._snapshot_from_cache_or_fallback(
                 key, lat, lon, source=source
             )
