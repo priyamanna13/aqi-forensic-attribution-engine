@@ -62,8 +62,11 @@ _CACHE_TIMESTAMPS: dict[str, float] = {}
 from contextlib import asynccontextmanager
 import threading
 
+INIT_ERROR = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global INIT_ERROR
     # 1. Apply migrations and seed the database on startup
     log.info("Applying database schema migrations and seeding...")
     try:
@@ -73,12 +76,14 @@ async def lifespan(app: FastAPI):
         seed_main()
         log.info("Database initialized successfully.")
     except Exception as exc:
+        INIT_ERROR = f"{type(exc).__name__}: {str(exc)}"
         log.error("Failed while initializing database: %s", exc)
 
     # 2. Start the background scheduler (free tier workaround)
     log.info("Starting background APScheduler inside FastAPI...")
     from apscheduler.schedulers.background import BackgroundScheduler
     from scheduler.scheduler import cpcb_poll_job, weather_sync_job, overpass_refresh_job
+
     
     scheduler = BackgroundScheduler()
     scheduler.add_job(cpcb_poll_job, "interval", minutes=15, id="cpcb_poller", misfire_grace_time=60)
@@ -206,6 +211,14 @@ class AttributionRequest(BaseModel):
 @app.get("/health", tags=["Meta"])
 def health():
     """Liveness + DB connectivity check."""
+    if INIT_ERROR:
+        return {
+            "status": "error",
+            "db": False,
+            "db_error": f"Startup failed: {INIT_ERROR}",
+            "pipeline_version": PIPELINE_VERSION,
+        }
+
     try:
         from sqlalchemy import text
         from db.connection import engine
