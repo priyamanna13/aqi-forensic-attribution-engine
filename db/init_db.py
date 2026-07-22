@@ -60,17 +60,23 @@ def _execute_schema_sql() -> None:
         except Exception:
             pass
 
-    # 2. Run tables/indexes inside transaction
-    with engine.begin() as conn:
-        conn.execute(text(safe_sql))
-        # Ensure trailing migrations run
-        for line in safe_sql.splitlines():
-            line_str = line.strip()
-            if line_str.startswith("ALTER TABLE") or line_str.startswith("CREATE INDEX"):
-                try:
-                    conn.execute(text(line_str))
-                except Exception:
-                    pass
+    # 2. Run tables/indexes inside transaction using the RAW DBAPI driver
+    # SQLAlchemy's conn.execute(text()) silently drops multiple statements in psycopg2!
+    with engine.connect() as conn:
+        dbapi_conn = conn.connection
+        with dbapi_conn.cursor() as cur:
+            cur.execute(safe_sql)
+            # Ensure trailing migrations run
+            for line in safe_sql.splitlines():
+                line_str = line.strip()
+                if line_str.startswith("ALTER TABLE") or line_str.startswith("CREATE INDEX"):
+                    try:
+                        cur.execute(line_str)
+                    except Exception:
+                        pass
+        # CRITICAL: We must commit on the RAW connection.
+        # Calling conn.commit() is a no-op because SQLAlchemy doesn't know the connection is dirty!
+        dbapi_conn.commit()
 
 
 def _verify_tables() -> dict[str, bool]:
