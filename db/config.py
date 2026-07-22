@@ -51,6 +51,12 @@ def database_url() -> str:
 
     Password is URL-quoted so special characters don't break the DSN.
     """
+    env_url = os.getenv("DATABASE_URL")
+    if env_url:
+        if env_url.startswith("postgres://"):
+            return env_url.replace("postgres://", "postgresql://", 1)
+        return env_url
+
     password = quote_plus(POSTGRES_PASSWORD)
     return (
         f"postgresql://{POSTGRES_USER}:{password}"
