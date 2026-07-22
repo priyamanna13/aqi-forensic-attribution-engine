@@ -46,16 +46,21 @@ def _execute_schema_sql() -> None:
 
     with engine.connect() as conn:
         dbapi_conn = conn.connection
-        with dbapi_conn.cursor() as cur:
-            cur.execute(sql)
-            for line in sql.splitlines():
-                line_str = line.strip()
-                if line_str.startswith("ALTER TABLE") or line_str.startswith("CREATE INDEX"):
-                    try:
-                        cur.execute(line_str)
-                    except Exception:
-                        pass
-        conn.commit()
+        # Render requires CREATE EXTENSION to sometimes run outside a transaction block.
+        # Setting autocommit to True prevents the 'CREATE EXTENSION cannot run inside a transaction block' error.
+        dbapi_conn.autocommit = True
+        try:
+            with dbapi_conn.cursor() as cur:
+                cur.execute(sql)
+                for line in sql.splitlines():
+                    line_str = line.strip()
+                    if line_str.startswith("ALTER TABLE") or line_str.startswith("CREATE INDEX"):
+                        try:
+                            cur.execute(line_str)
+                        except Exception:
+                            pass
+        finally:
+            dbapi_conn.autocommit = False
 
 
 def _verify_tables() -> dict[str, bool]:
