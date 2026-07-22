@@ -5,7 +5,7 @@
  * main dashboard data comes from REST API calls, not WS.
  */
 export class WebSocketClient {
-  constructor(url = "ws://localhost:8000/api/v1/simulation/ws") {
+  constructor(url = `${import.meta.env.VITE_WS_URL || "ws://localhost:8000"}/api/v1/simulation/ws`) {
     this.url = url;
     this.socket = null;
     this.reconnectTimer = null;

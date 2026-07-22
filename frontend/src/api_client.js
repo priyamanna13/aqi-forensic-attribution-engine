@@ -3,7 +3,7 @@
  * Fixed: BASE_URL corrected to port 8000 (FastAPI/Uvicorn).
  * Added: getAllWindCones(), getAttributionLive(), graceful error handling on every method.
  */
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 async function apiFetch(path, options = {}) {
   const response = await fetch(`${BASE_URL}${path}`, {
