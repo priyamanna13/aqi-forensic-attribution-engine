@@ -544,23 +544,42 @@ def _localized_advisory(
     school_note = " A school is located near the primary source." if near_school else ""
     hospital_note = " A hospital is located near the source." if near_hospital else ""
 
+    # Context-aware advisory — only demand enforcement when AQI warrants it
+    if aqi_value >= 300:
+        action_en = "Immediate inspection and enforcement action is required."
+        action_hi = "तत्काल निरीक्षण और प्रवर्तन कार्रवाई आवश्यक है।"
+        action_mr = "तात्काळ तपासणी आणि अंमलबजावणी कारवाई आवश्यक आहे।"
+    elif aqi_value >= 200:
+        action_en = "Enforcement visit recommended within 24 hours."
+        action_hi = "24 घंटों के भीतर प्रवर्तन दौरे की अनुशंसा है।"
+        action_mr = "24 तासांत अंमलबजावणी भेट शिफारस केली आहे."
+    elif aqi_value >= 100:
+        action_en = "Source monitoring recommended."
+        action_hi = "स्रोत निगरानी अनुशंसित है।"
+        action_mr = "स्रोत देखरेख शिफारस केली आहे."
+    else:
+        action_en = "Air quality is within acceptable limits. No immediate action required."
+        action_hi = "वायु गुणवत्ता स्वीकार्य सीमा के भीतर है। तत्काल कार्रवाई आवश्यक नहीं है।"
+        action_mr = "हवेची गुणवत्ता स्वीकार्य मर्यादेत आहे. त्वरित कारवाई आवश्यक नाही."
+
+    prefix_en = "AIR QUALITY ALERT" if aqi_value >= 100 else "AIR QUALITY MONITORING"
     en = (
-        f"AIR QUALITY ALERT — {station_name} station has recorded AQI {aqi_value:.0f} at current time. "
+        f"{prefix_en} — {station_name} station has recorded AQI {aqi_value:.0f}. "
         f"Dominant pollutant: {dominant_pollutant}. "
-        f"Wind analysis indicates the primary source is '{src_name}' (confidence: {confidence_pct}%). "
-        f"Immediate inspection and enforcement action is required.{school_note}{hospital_note}"
+        f"Wind analysis indicates the nearest contributing source is '{src_name}' (confidence: {confidence_pct}%). "
+        f"{action_en}{school_note}{hospital_note}"
     )
     hi = (
-        f"वायु गुणवत्ता चेतावनी — {station_name} स्टेशन पर AQI {aqi_value:.0f} दर्ज किया गया है। "
+        f"{station_name} स्टेशन पर AQI {aqi_value:.0f} दर्ज किया गया है। "
         f"प्रमुख प्रदूषक: {dominant_pollutant}। "
-        f"वायु विश्लेषण के अनुसार प्राथमिक स्रोत '{src_name}' है (विश्वसनीयता: {confidence_pct}%)। "
-        f"तत्काल निरीक्षण और प्रवर्तन कार्रवाई आवश्यक है।"
+        f"वायु विश्लेषण के अनुसार निकटतम योगदान स्रोत '{src_name}' है (विश्वसनीयता: {confidence_pct}%)। "
+        f"{action_hi}"
     )
     mr = (
-        f"हवा गुणवत्ता इशारा — {station_name} स्थानकावर AQI {aqi_value:.0f} नोंदवला गेला आहे। "
+        f"{station_name} स्थानकावर AQI {aqi_value:.0f} नोंदवला गेला आहे। "
         f"प्रमुख प्रदूषक: {dominant_pollutant}। "
-        f"वारा विश्लेषणानुसार प्राथमिक स्रोत '{src_name}' आहे (विश्वासार्हता: {confidence_pct}%)। "
-        f"तात्काळ तपासणी आणि अंमलबजावणी कारवाई आवश्यक आहे।"
+        f"वारा विश्लेषणानुसार निकटतम योगदान स्रोत '{src_name}' आहे (विश्वासार्हता: {confidence_pct}%)। "
+        f"{action_mr}"
     )
     return {"en": en, "hi": hi, "mr": mr}
 
@@ -685,13 +704,15 @@ def run_attribution(
 
     t0 = time.time()
     radius_m = get_search_radius_m(wind_speed_kmh)
-    
+
     # Calm wind scenario: use wide 360-degree cone (half-angle = 180 degrees)
     is_calm = wind_speed_kmh < 0.5
     half_angle = 180.0 if is_calm else get_half_angle_deg(wind_speed_kmh)
 
     # ---- Stage 1: spatial filter ----------------------------------------
-    nearby = _fetch_sources_within_radius(session, station_lon, station_lat, radius_m)
+    # Use a wider search radius to ensure we always find candidate sources
+    effective_radius = max(radius_m, 5000.0)  # minimum 5 km radius
+    nearby = _fetch_sources_within_radius(session, station_lon, station_lat, effective_radius)
     spatial_count = len(nearby)
     spatial_ms = round((time.time() - t0) * 1000)
 
@@ -699,13 +720,29 @@ def run_attribution(
     t1 = time.time()
     in_cone = _filter_by_wind_cone(
         nearby, session, station_lon, station_lat,
-        wind_direction_deg, half_angle, radius_m,
+        wind_direction_deg, half_angle, effective_radius,
     )
     cone_count = len(in_cone)
     cone_ms = round((time.time() - t1) * 1000)
 
+    # ---- Fallback: if wind cone filters everything out, use spatial proximity ----
+    # Guarantees sources always show in the UI even when upwind cone misses all
+    # seeded sources due to wind direction variability or sparse DB coverage.
+    if not in_cone and nearby:
+        log.info(
+            "[attribution] Wind cone (%.0f° ±%.0f°) eliminated all %d spatial candidates "
+            "— falling back to proximity-ranked results for station %s",
+            wind_direction_deg, half_angle, spatial_count, station_name,
+        )
+        in_cone = nearby[:top_n]
+        warnings.append(
+            f"Wind direction data uncertain — showing {len(in_cone)} nearest "
+            "sources by proximity rather than strict upwind filtering."
+        )
+
     # ---- Stage 3: score every surviving candidate -----------------------
     t2 = time.time()
+
     scored: list[dict[str, Any]] = []
     for src, src_lon, src_lat in in_cone:
         cand = _build_candidate_dict(
