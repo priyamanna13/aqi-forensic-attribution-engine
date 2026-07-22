@@ -657,6 +657,10 @@ def run_attribution_endpoint(
     signature_class = fp.get("signature_class", "mixed")
     dom_pollutant = top_half["trigger_station"]["reading"].get("dominant_pollutant", "PM10")
 
+    # If this is a simulated spike, bypass the wet-scavenging physics model by forcing precipitation to 0.0.
+    # Otherwise, the physics model will see the rain and artificially wash out our fake spike!
+    simulated_precip = 0.0 if is_simulated else float(weather.get("precipitation_mm_last_1h", 0.0))
+
     lower_half = run_attribution(
         session=session,
         station_lon=sta_lon,
@@ -670,7 +674,7 @@ def run_attribution_endpoint(
         wind_speed_kmh=float(weather["wind_speed_kmh"]),
         pasquill_class=weather["atmospheric_stability"]["pasquill_class"],
         pollutant_readings=values,
-        precipitation_mm_last_1h=float(weather.get("precipitation_mm_last_1h", 0.0)),
+        precipitation_mm_last_1h=simulated_precip,
     )
 
     # ---- merge into full contract payload ----------------------------------
