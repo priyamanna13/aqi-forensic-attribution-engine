@@ -296,3 +296,46 @@ path. Expected output: `RESULT: live payload conforms to data_contract_sample.js
   table (`network`/`city`/`state`/`elevation_m`) are sourced from
   `pipeline/station_meta.py`; coordinates come from the station's PostGIS
   geometry.
+
+
+---
+
+# Task 3 — Forensic Attribution Pipeline
+
+The core attribution engine isolates the physical source responsible for an AQI spike using spatial, environmental, and compliance data.
+
+## 3-Stage Funnel Architecture
+
+1. **Spatial Filter (Proximity)**: Uses PostGIS ST_DWithin to find all potential polluting infrastructure within a dynamic radius (scaled by wind speed).
+2. **Wind-Cone Geometry (Directional)**: Generates a Pasquill-Gifford upwind dispersion cone polygon (using wind direction and stability class) and filters sources using ST_Contains / ST_Intersects.
+   * **Proximity Fallback**: If the wind data is erratic or the cone is empty, the engine gracefully falls back to the nearest sources to prevent attribution failures.
+3. **Multi-Factor Scoring**:
+   * **Wind Alignment (40%)**: Proximity to the central axis of the wind cone.
+   * **Chemical Fingerprint (35%)**: Matching the source's expected emission profile (e.g., SO2 from industry, coarse PM from construction) against the live readings.
+   * **Temporal Match (25%)**: Comparing the spike time against the facility's permitted operating hours.
+   * **Compliance Penalty**: Deductions for historical violations or proximity to sensitive zones (schools/hospitals).
+
+## Environmental Physics Engine
+
+- **Wet-Scavenging Model**: Live precipitation data is fetched via OpenWeatherMap. If active rainfall is detected (>0.1 mm/hr), particulate matter (PM2.5/PM10) undergoes exponential wash-out (scavenging lambda ~0.15), and the AQI is strictly capped at 95.
+- **Simulation Bypass**: For demonstration purposes, simulated spikes automatically bypass wet-scavenging to ensure the fake spike is not artificially washed out by real-world rain.
+
+## Actionable Enforcement Intelligence
+
+The pipeline generates localized public advisories (English, Hindi, Marathi) and contextual enforcement directives based on severity:
+- **AQI >= 100 (Moderate)**: Source monitoring and traffic police alerts.
+- **AQI >= 200 (Poor)**: Dispatching field inspectors, issuing show-cause notices for sensitive zones, and activating water sprinklers for dust sources.
+- **Off-Hours Violations**: Automatically flags INVESTIGATE_ILLEGAL_OFF_HOURS_OPERATION if a source causes a severe spike outside its permitted operating schedule.
+
+---
+
+# Task 4 — Real-Time Frontend Dashboard
+
+A reactive, map-based React frontend (rontend/src/App.jsx) for visualizing air quality telemetry and forensic enforcement.
+
+## Features
+
+- **Live Sensor Telemetry**: A smooth slider interface allows operators to scrub through 24 hours of historical AQI data, updating the interactive Leaflet map and dynamic charts in real-time.
+- **Forensic Action Center**: A dedicated UI panel that only appears during severe spikes. It displays the primary attributed source, confidence scores, dispatch ETA, and a checklist of required enforcement actions.
+- **WebSocket Streaming**: Uses FastAPI WebSockets to push live alerts and updated payloads to the frontend instantly, bypassing traditional polling.
+- **Simulation Backdoor**: An emergency override button built directly into the UI. It triggers a backdoor API endpoint (/api/v1/simulation/trigger-spike) that forces a simulated 310 AQI event, allowing stakeholders to view the entire attribution and enforcement flow on-demand without waiting for real-world pollution.
