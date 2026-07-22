@@ -59,6 +59,45 @@ _CACHE_TIMESTAMPS: dict[str, float] = {}
 # App + middleware
 # ============================================================
 
+from contextlib import asynccontextmanager
+import threading
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 1. Apply migrations and seed the database on startup
+    log.info("Applying database schema migrations and seeding...")
+    try:
+        from db.init_db import _execute_schema_sql
+        _execute_schema_sql()
+        from db.seed_data import main as seed_main
+        seed_main()
+        log.info("Database initialized successfully.")
+    except Exception as exc:
+        log.error("Failed while initializing database: %s", exc)
+
+    # 2. Start the background scheduler (free tier workaround)
+    log.info("Starting background APScheduler inside FastAPI...")
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from scheduler.scheduler import cpcb_poll_job, weather_sync_job, overpass_refresh_job
+    
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(cpcb_poll_job, "interval", minutes=15, id="cpcb_poller", misfire_grace_time=60)
+    scheduler.add_job(weather_sync_job, "interval", minutes=10, id="weather_sync", misfire_grace_time=60)
+    scheduler.add_job(overpass_refresh_job, "interval", hours=6, id="overpass_refresh", misfire_grace_time=300)
+    
+    # Run initial sync immediately in a separate thread so it doesn't block FastAPI startup
+    def initial_sync():
+        weather_sync_job()
+        cpcb_poll_job()
+    threading.Thread(target=initial_sync, daemon=True).start()
+    
+    scheduler.start()
+    
+    yield
+    
+    # Shutdown
+    scheduler.shutdown()
+
 app = FastAPI(
     title="AQI Attribution API",
     description=(
@@ -69,6 +108,7 @@ app = FastAPI(
     version=PIPELINE_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
