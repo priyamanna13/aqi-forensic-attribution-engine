@@ -206,12 +206,28 @@ class AttributionRequest(BaseModel):
 @app.get("/health", tags=["Meta"])
 def health():
     """Liveness + DB connectivity check."""
-    db_ok = ping()
-    return {
-        "status": "ok",
-        "db": db_ok,
-        "pipeline_version": PIPELINE_VERSION,
-    }
+    try:
+        from sqlalchemy import text
+        from db.connection import engine
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+            has_postgis = conn.execute(
+                text("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='postgis')")
+            ).scalar()
+        
+        return {
+            "status": "ok",
+            "db": bool(has_postgis),
+            "db_error": "PostGIS extension missing" if not has_postgis else None,
+            "pipeline_version": PIPELINE_VERSION,
+        }
+    except Exception as exc:
+        return {
+            "status": "ok",
+            "db": False,
+            "db_error": str(exc),
+            "pipeline_version": PIPELINE_VERSION,
+        }
 
 
 @app.get("/stations", tags=["Stations"])
