@@ -185,5 +185,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 - GitHub: [@priyamanna13](https://github.com/priyamanna13)
 
 **Adarsh Maurya**
-
+- GitHub: [@adarsh130905maurya](https://github.com/adarsh130905maurya)
+  
 **Anish Maurya**
+- GitHub: [@anish76948](https://github.com/anish76948)
