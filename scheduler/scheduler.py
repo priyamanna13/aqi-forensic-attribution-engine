@@ -133,6 +133,15 @@ def main() -> int:
     except Exception as exc:
         log.error("Failed while applying schema migrations: %s", exc)
 
+    # Seed the database automatically on startup
+    log.info("Seeding database with stations and sources...")
+    try:
+        from db.seed_data import main as seed_main
+        seed_main()
+        log.info("Database seeded successfully.")
+    except Exception as exc:
+        log.error("Failed while seeding database: %s", exc)
+
     # Run initial sync immediately on startup
     log.info("Running initial startup data sync...")
     weather_sync_job()
