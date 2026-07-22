@@ -24,7 +24,7 @@ const PUNE_STATIONS = [
 ];
 
 // ─── POLL INTERVAL matches server-side 30 s attribution cache TTL ──────────────
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 600_000; // 10 minutes
 // Number of consecutive poll failures before the emergency spike button appears.
 const SPIKE_FAILURE_THRESHOLD = 3;
 
@@ -926,6 +926,8 @@ export default function App() {
             setDashboardData(dataContract);
           });
         }
+      } finally {
+        if (mounted) setIsFetching(false);
       }
     };
 
