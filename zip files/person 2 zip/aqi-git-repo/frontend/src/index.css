@@ -1,4 +1,4 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
 /* Tailwind v4 explicitly targets paths inside CSS source maps */
 @source "../index.html";

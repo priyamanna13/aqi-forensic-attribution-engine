@@ -1,0 +1,99 @@
+[
+  {
+    "event_id": "a34874a8-55f3-4f9e-bf7e-107d5d646d1d",
+    "event_severity": "critical",
+    "pipeline_version": "3.1.0",
+    "generated_at": "2026-06-27T05:47:18.227Z",
+    "trigger_station": {
+      "id": "3503ff42-31a2-47c6-b7d9-eb9e0db557e5",
+      "name": "Shivajinagar",
+      "network": "CPCB_CAAQMS",
+      "city": "Pune",
+      "state": "Maharashtra",
+      "coordinates": [
+        73.844,
+        18.5308
+      ],
+      "elevation_m": 560,
+      "reading": {
+        "timestamp": "2026-06-25T08:30:00+05:30",
+        "total_aqi": 310.0,
+        "aqi_category": "Very Poor",
+        "dominant_pollutant": "PM10",
+        "sub_pollutants": {
+          "pm25": {
+            "value": 148.6,
+            "unit": "µg/m³",
+            "averaging_period": "24hr",
+            "naaqs_limit": 60.0,
+            "exceedance_factor": 2.48
+          },
+          "pm10": {
+            "value": 387.2,
+            "unit": "µg/m³",
+            "averaging_period": "24hr",
+            "naaqs_limit": 100.0,
+            "exceedance_factor": 3.87
+          },
+          "no2": {
+            "value": 72.4,
+            "unit": "µg/m³",
+            "averaging_period": "24hr",
+            "naaqs_limit": 80.0,
+            "exceedance_factor": 0.91
+          },
+          "so2": {
+            "value": 54.8,
+            "unit": "µg/m³",
+            "averaging_period": "24hr",
+            "naaqs_limit": 80.0,
+            "exceedance_factor": 0.69
+          },
+          "co": {
+            "value": 3.2,
+            "unit": "mg/m³",
+            "averaging_period": "8hr",
+            "naaqs_limit": 4.0,
+            "exceedance_factor": 0.8
+          },
+          "o3": {
+            "value": 42.1,
+            "unit": "µg/m³",
+            "averaging_period": "8hr",
+            "naaqs_limit": 100.0,
+            "exceedance_factor": 0.42
+          }
+        },
+        "chemical_fingerprint": {
+          "pm25_pm10_ratio": 0.384,
+          "no2_so2_ratio": 1.321,
+          "signature_class": "crustal_dominant",
+          "notes": "High PM coarse fraction with moderate NO₂ suggests combined dust + vehicular contribution"
+        }
+      }
+    },
+    "weather_snapshot": {
+      "source": "OpenWeatherMap (unavailable — calm fallback)",
+      "observed_at": "2026-06-27T11:17:18.227223+05:30",
+      "wind_speed_kmh": 0.0,
+      "wind_direction_deg": 0.0,
+      "wind_direction_cardinal": "N",
+      "temperature_c": 0.0,
+      "relative_humidity_pct": 0.0,
+      "pressure_hpa": 0.0,
+      "cloud_cover_oktas": 0,
+      "precipitation_mm_last_1h": 0.0,
+      "visibility_km": 10.0,
+      "mixing_layer_height_m": 2070,
+      "atmospheric_stability": {
+        "pasquill_class": "A",
+        "label": "Extremely Unstable",
+        "description": "Strong solar radiation and low wind speed. Vigorous vertical mixing; plumes loft and disperse rapidly upward.",
+        "dispersion_coefficient": {
+          "sigma_y": 0.4,
+          "sigma_z": 0.25
+        }
+      }
+    }
+  }
+]

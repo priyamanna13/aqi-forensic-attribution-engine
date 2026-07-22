@@ -808,6 +808,7 @@ export default function App() {
   // 'live' | 'refreshing' | 'stale' | 'offline'
   const [connectionStatus, setConnectionStatus] = useState('live');
   const [lastUpdated, setLastUpdated]           = useState(null);
+  const [isFetching, setIsFetching]             = useState(false);
   const pollFailureCount = useRef(0);          // raw counter — no re-render per failure
 
   // ── Spike / simulation (emergency fallback only)
@@ -879,6 +880,7 @@ export default function App() {
       const controller = new AbortController();
       const abortTimer = setTimeout(() => controller.abort(), 8000);
 
+      setIsFetching(true);
       try {
         if (pollFailureCount.current > 0) setConnectionStatus('refreshing');
         const data = await fetch(
@@ -1283,15 +1285,23 @@ export default function App() {
         </MapContainer>
 
         {/* ── LIVE BADGE ── */}
-        <div className="live-badge">
-          <div className={`live-dot status-${connectionStatus}`}/>
-          <span className="live-text">
-            {connectionStatus === 'live'      ? t.live_feed
-            : connectionStatus === 'refreshing' ? (activeLang === 'hi' ? '\u0905\u092A\u0921\u0947\u091F...' : activeLang === 'mr' ? '\u0905\u092A\u0921\u0947\u091F...' : 'Refreshing\u2026')
-            : connectionStatus === 'stale'    ? (activeLang === 'hi' ? '\u092A\u0941\u0930\u093E\u0928\u093E \u0921\u0947\u091F\u093E' : activeLang === 'mr' ? '\u091C\u0941\u0928\u093E \u0921\u0947\u091F\u093E' : 'Stale Data')
-            : (activeLang === 'hi' ? '\u0911\u092B\u0932\u093E\u0907\u0928' : activeLang === 'mr' ? '\u0911\u092B\u0932\u093E\u0907\u0928' : 'Offline')}
+        <div className="live-badge" style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          background: (isFetching || loading || connectionStatus === 'refreshing') ? 'rgba(59, 130, 246, 0.2)' : 'rgba(8, 8, 10, 0.85)',
+          border: (isFetching || loading || connectionStatus === 'refreshing') ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.08)',
+          transition: 'all 0.3s ease'
+        }}>
+          <div className={`live-dot status-${(isFetching || loading || connectionStatus === 'refreshing') ? 'refreshing' : connectionStatus}`}/>
+          <span className="live-text" style={{ fontFamily: 'monospace', fontSize: '11px', letterSpacing: '0.02em' }}>
+            {(isFetching || loading || connectionStatus === 'refreshing')
+              ? '⏳ FETCHING BACKGROUND DATA (OWM / WAQI / CPCB)...'
+              : connectionStatus === 'live'
+              ? '● LIVE BACKGROUND SYNC ACTIVE (OWM, WAQI, CPCB)'
+              : connectionStatus === 'stale'
+              ? 'Stale Telemetry'
+              : 'Offline'}
           </span>
-          {lastUpdated && connectionStatus === 'live' && (
+          {lastUpdated && connectionStatus === 'live' && !isFetching && !loading && (
             <span style={{ fontSize: 9, color: '#71717a', fontFamily: 'monospace', marginLeft: 4 }}>
               {fmt(lastUpdated)}
             </span>
@@ -1452,12 +1462,12 @@ export default function App() {
         <div className="sidebar-scroll">
 
           {/* Telemetry Loader Banner */}
-          {(connectionStatus === 'refreshing' || spikeLoading) && (
+          {(connectionStatus === 'refreshing' || spikeLoading || loading || isFetching) && (
             <div style={{
-              background: 'rgba(59, 130, 246, 0.1)',
-              border: '1px solid rgba(59, 130, 246, 0.25)',
+              background: 'rgba(59, 130, 246, 0.12)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
               borderRadius: '8px',
-              padding: '8px 12px',
+              padding: '10px 14px',
               marginBottom: '16px',
               display: 'flex',
               alignItems: 'center',
@@ -1465,21 +1475,21 @@ export default function App() {
               gap: '10px',
               fontSize: '11px',
               color: '#60a5fa',
-              fontWeight: 600,
+              fontWeight: 700,
               fontFamily: 'monospace',
               letterSpacing: '0.05em',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              boxShadow: '0 4px 14px rgba(59, 130, 246, 0.15)'
             }}>
               <span className="spinner" style={{
                 display: 'inline-block',
-                width: '12px',
-                height: '12px',
+                width: '14px',
+                height: '14px',
                 border: '2px solid currentColor',
                 borderTopColor: 'transparent',
                 borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite'
               }}/>
-              FETCHING LIVE TELEMETRY... PLEASE WAIT
+              FETCHING LIVE TELEMETRY (OWM / WAQI / CPCB)... PLEASE WAIT
             </div>
           )}
 

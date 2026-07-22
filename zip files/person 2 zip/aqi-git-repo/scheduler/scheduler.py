@@ -6,14 +6,13 @@ Runs as a separate process (or Docker service) that triggers:
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 import logging
 import os
+import sys
 import time
+from pathlib import Path
 from typing import Optional
+
 import yaml
 from apscheduler.schedulers.blocking import BlockingScheduler
 

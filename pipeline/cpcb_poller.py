@@ -103,14 +103,63 @@ class CPCBPoller:
             log.warning("WAQI fetch failed for %s: %s", station_name, e)
         return None
 
+    def _fetch_live_owm_air(self, lat: float, lon: float, station_name: str) -> Optional[dict[str, Any]]:
+        """Fetch real-time air pollution data from OpenWeatherMap Air Pollution API.
+        
+        API: http://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&appid={appid}
+        Note on unit conversion for Indian CPCB NAQI standard:
+          OWM co is in μg/m3 -> MUST divide by 1000 to convert to mg/m3!
+        """
+        owm_key = (os.getenv("OWM_API_KEY") or "").strip()
+        if not owm_key:
+            return None
+        url = "http://api.openweathermap.org/data/2.5/air_pollution"
+        params = {
+            "lat": lat,
+            "lon": lon,
+            "appid": owm_key,
+        }
+        try:
+            resp = self._session.get(url, params=params, timeout=self.timeout)
+            if resp.status_code == 200:
+                res_json = resp.json()
+                records = res_json.get("list", [])
+                if records:
+                    item = records[0]
+                    comp = item.get("components", {})
+                    co_mgm3 = float(comp.get("co")) / 1000.0 if comp.get("co") is not None else None
+                    pm25_val = float(comp.get("pm2_5")) if comp.get("pm2_5") is not None else None
+                    pm10_val = float(comp.get("pm10")) if comp.get("pm10") is not None else None
+                    no2_val = float(comp.get("no2")) if comp.get("no2") is not None else None
+                    so2_val = float(comp.get("so2")) if comp.get("so2") is not None else None
+                    o3_val = float(comp.get("o3")) if comp.get("o3") is not None else None
+
+                    pollutants = {
+                        "pm25": pm25_val,
+                        "pm10": pm10_val,
+                        "no2": no2_val,
+                        "so2": so2_val,
+                        "co": co_mgm3,
+                        "o3": o3_val,
+                    }
+                    log.info("OWM Air fetch succeeded for %s (lat=%.4f, lon=%.4f): PM2.5=%.1f, PM10=%.1f, CO=%.3f mg/m3",
+                             station_name, lat, lon, pm25_val or 0, pm10_val or 0, co_mgm3 or 0)
+                    return {
+                        "pollutants": pollutants
+                    }
+        except Exception as e:
+            log.warning("OWM Air fetch failed for %s: %s", station_name, e)
+        return None
+
     def fetch_station_reading(self, station_cfg: dict[str, Any], session: Session) -> dict[str, Any]:
-        """GET latest reading for a station, merging live CPCB and WAQI data."""
+        """GET latest reading for a station, merging live CPCB, WAQI, and OWM Air data."""
         station_name = station_cfg["name"]
         cpcb_id = station_cfg.get("cpcb_station_id", "")
         lat = station_cfg.get("lat")
         lon = station_cfg.get("lon")
 
         waqi_data = None
+        owm_air_data = None
         cpcb_data = None
 
         # 1. Fetch from WAQI (if coordinates available)
@@ -122,7 +171,14 @@ class CPCBPoller:
             except Exception as exc:
                 log.warning("WAQI fetch failed for %s: %s", station_name, exc)
 
-        # 2. Fetch from CPCB (if key and cpcb_id available)
+        # 2. Fetch from OpenWeatherMap Air Pollution API (if coordinates available)
+        if lat is not None and lon is not None:
+            try:
+                owm_air_data = self._fetch_live_owm_air(lat, lon, station_name)
+            except Exception as exc:
+                log.warning("OWM Air fetch failed for %s: %s", station_name, exc)
+
+        # 3. Fetch from CPCB (if key and cpcb_id available)
         if self.api_key and cpcb_id:
             try:
                 cpcb_data = self._fetch_live_cpcb(cpcb_id, station_name)
@@ -131,8 +187,8 @@ class CPCBPoller:
             except Exception as exc:
                 log.warning("CPCB fetch failed for %s: %s", station_name, exc)
 
-        # 3. Merge data sources
-        if waqi_data or cpcb_data:
+        # 4. Merge data sources (WAQI + OWM Air + CPCB)
+        if waqi_data or owm_air_data or cpcb_data:
             IST = timezone(timedelta(hours=5, minutes=30))
             now_ist = datetime.now(IST)
 
@@ -148,9 +204,15 @@ class CPCBPoller:
                     if v is not None:
                         merged_pollutants[k] = v
 
-            # Merge/Overlay with CPCB values
+            # Fill / Enrich missing fields using OpenWeatherMap Air Pollution API
+            if owm_air_data:
+                for k, v in owm_air_data["pollutants"].items():
+                    if v is not None:
+                        if merged_pollutants[k] is None:
+                            merged_pollutants[k] = v
+
+            # Merge/Overlay with CPCB ground truth values
             if cpcb_data:
-                # Check individual CPCB chemical concentrations
                 for p_key in ["pm25", "pm10", "no2", "so2", "co", "o3"]:
                     val = cpcb_data.get(p_key)
                     if val is not None:
@@ -170,8 +232,8 @@ class CPCBPoller:
                 "synthetic": False,
             }
 
-        # 4. Fallback to synthetic if both failed
-        log.warning("Both WAQI and CPCB failed for %s; using synthetic telemetry.", station_name)
+        # 5. Fallback to synthetic if all failed
+        log.warning("WAQI, OWM Air, and CPCB failed for %s; using synthetic telemetry.", station_name)
         return self._generate_synthetic_reading(station_cfg, session)
 
     def _fetch_live_cpcb(self, cpcb_id: str, station_name: str) -> Optional[dict[str, Any]]:

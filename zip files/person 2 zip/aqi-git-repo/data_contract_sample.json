@@ -1,0 +1,340 @@
+{
+  "event_id": "a1f7c2e4-89b3-4d6e-9f12-3c8a5b7d0e41",
+  "event_severity": "critical",
+  "pipeline_version": "3.1.0",
+  "generated_at": "2026-06-25T08:47:32.614Z",
+
+  "trigger_station": {
+    "id": "d4e8f1a2-6b3c-4f9d-8e7a-1c2d5f0b9a63",
+    "name": "Shivajinagar",
+    "network": "CPCB_CAAQMS",
+    "city": "Pune",
+    "state": "Maharashtra",
+    "coordinates": [73.8567, 18.5308],
+    "elevation_m": 560,
+    "reading": {
+      "timestamp": "2026-06-25T08:30:00+05:30",
+      "total_aqi": 310,
+      "aqi_category": "Very Poor",
+      "dominant_pollutant": "PM10",
+      "sub_pollutants": {
+        "pm25": {
+          "value": 148.6,
+          "unit": "µg/m³",
+          "averaging_period": "24hr",
+          "naaqs_limit": 60,
+          "exceedance_factor": 2.48
+        },
+        "pm10": {
+          "value": 387.2,
+          "unit": "µg/m³",
+          "averaging_period": "24hr",
+          "naaqs_limit": 100,
+          "exceedance_factor": 3.87
+        },
+        "no2": {
+          "value": 72.4,
+          "unit": "µg/m³",
+          "averaging_period": "24hr",
+          "naaqs_limit": 80,
+          "exceedance_factor": 0.91
+        },
+        "so2": {
+          "value": 54.8,
+          "unit": "µg/m³",
+          "averaging_period": "24hr",
+          "naaqs_limit": 80,
+          "exceedance_factor": 0.69
+        },
+        "co": {
+          "value": 3.2,
+          "unit": "mg/m³",
+          "averaging_period": "8hr",
+          "naaqs_limit": 4,
+          "exceedance_factor": 0.80
+        },
+        "o3": {
+          "value": 42.1,
+          "unit": "µg/m³",
+          "averaging_period": "8hr",
+          "naaqs_limit": 100,
+          "exceedance_factor": 0.42
+        }
+      },
+      "chemical_fingerprint": {
+        "pm25_pm10_ratio": 0.384,
+        "no2_so2_ratio": 1.321,
+        "signature_class": "crustal_dominant",
+        "notes": "High PM coarse fraction with moderate NO₂ suggests combined dust + vehicular contribution"
+      }
+    }
+  },
+
+  "weather_snapshot": {
+    "source": "IMD_Pune_Observatory",
+    "observed_at": "2026-06-25T08:30:00+05:30",
+    "wind_speed_kmh": 14.5,
+    "wind_direction_deg": 290,
+    "wind_direction_cardinal": "WNW",
+    "temperature_c": 31.4,
+    "relative_humidity_pct": 62,
+    "pressure_hpa": 1006.3,
+    "cloud_cover_oktas": 3,
+    "precipitation_mm_last_1h": 0.0,
+    "visibility_km": 4.2,
+    "mixing_layer_height_m": 850,
+    "atmospheric_stability": {
+      "pasquill_class": "D",
+      "label": "Neutral",
+      "description": "Moderate mechanical mixing; limited vertical dispersion. Typical for overcast daytime or high-wind conditions.",
+      "dispersion_coefficient": {
+        "sigma_y": 0.22,
+        "sigma_z": 0.08
+      }
+    }
+  },
+
+  "wind_cone_geometry": {
+    "type": "Feature",
+    "properties": {
+      "cone_type": "upwind_source_area",
+      "origin_station": "Shivajinagar",
+      "bearing_deg": 290,
+      "half_angle_deg": 18,
+      "reach_km": 4.5,
+      "pasquill_class": "D",
+      "style": {
+        "fill_color": "#ef444480",
+        "stroke_color": "#dc2626",
+        "stroke_width": 2,
+        "fill_opacity": 0.25
+      }
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [73.8567, 18.5308],
+          [73.8271, 18.5372],
+          [73.8185, 18.5441],
+          [73.8152, 18.5533],
+          [73.8234, 18.5589],
+          [73.8567, 18.5308]
+        ]
+      ]
+    }
+  },
+
+  "ranked_candidates": [
+    {
+      "rank": 1,
+      "id": "b7c3d9e1-4a28-4f5b-8c16-9d0e2f1a3b74",
+      "name": "Hinjewadi Phase-III Construction Cluster",
+      "type": "construction",
+      "description": "Large-scale commercial IT park construction with active earthmoving and concrete batching. Three adjacent sites operating simultaneously.",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [73.8215, 18.5487],
+            [73.8241, 18.5487],
+            [73.8241, 18.5512],
+            [73.8215, 18.5512],
+            [73.8215, 18.5487]
+          ]
+        ]
+      },
+      "distance_from_station_km": 3.72,
+      "bearing_from_station_deg": 296,
+      "compliance_profile": {
+        "permit_id": "PMC/CONST/2026/04781",
+        "schedule_start": "07:00",
+        "schedule_end": "19:00",
+        "operating_at_event_time": true,
+        "near_school": true,
+        "school_name": "Vibgyor High School, Balewadi",
+        "school_distance_m": 380,
+        "near_hospital": false,
+        "hospital_name": null,
+        "hospital_distance_m": null,
+        "dust_suppression_required": true,
+        "dust_suppression_observed": false,
+        "last_inspection_date": "2026-05-18",
+        "violation_count_90d": 3
+      },
+      "score_breakdown": {
+        "wind_alignment_score": 0.92,
+        "chemical_match_score": 0.88,
+        "temporal_match_score": 0.95,
+        "proximity_score": 0.78,
+        "compliance_penalty": 0.15,
+        "confidence_score": 0.91
+      }
+    },
+    {
+      "rank": 2,
+      "id": "e5f8a2c4-1d67-4b9e-a3f0-7c8d6e9b2a15",
+      "name": "Pimpri-Chinchwad Industrial Zone — Unit 14 (ACC Cement Silo)",
+      "type": "industrial",
+      "description": "Cement storage and dispatch facility with open conveyor belts. Known for fugitive PM10 emissions during morning dispatch hours.",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [73.8193, 18.5548]
+      },
+      "distance_from_station_km": 4.31,
+      "bearing_from_station_deg": 302,
+      "compliance_profile": {
+        "permit_id": "MPCB/IND/PUN/2024/11923",
+        "schedule_start": "06:00",
+        "schedule_end": "22:00",
+        "operating_at_event_time": true,
+        "near_school": false,
+        "school_name": null,
+        "school_distance_m": null,
+        "near_hospital": true,
+        "hospital_name": "Aditya Birla Memorial Hospital",
+        "hospital_distance_m": 620,
+        "dust_suppression_required": true,
+        "dust_suppression_observed": true,
+        "last_inspection_date": "2026-06-10",
+        "violation_count_90d": 1
+      },
+      "score_breakdown": {
+        "wind_alignment_score": 0.85,
+        "chemical_match_score": 0.91,
+        "temporal_match_score": 0.88,
+        "proximity_score": 0.69,
+        "compliance_penalty": 0.05,
+        "confidence_score": 0.84
+      }
+    },
+    {
+      "rank": 3,
+      "id": "c9a1b4d6-3e72-48f0-b5c8-2d7f0e4a6c39",
+      "name": "Mumbai–Pune Expressway Entry Corridor (Wakad Toll Plaza)",
+      "type": "traffic",
+      "description": "High-density diesel truck staging area with persistent idling during peak morning hours. Significant re-suspended road dust from unpaved shoulders.",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [73.8168, 18.5491],
+          [73.8201, 18.5463],
+          [73.8239, 18.5435],
+          [73.8274, 18.5411]
+        ]
+      },
+      "distance_from_station_km": 3.18,
+      "bearing_from_station_deg": 284,
+      "compliance_profile": {
+        "permit_id": null,
+        "schedule_start": "00:00",
+        "schedule_end": "23:59",
+        "operating_at_event_time": true,
+        "near_school": true,
+        "school_name": "Delhi Public School, Wakad",
+        "school_distance_m": 510,
+        "near_hospital": false,
+        "hospital_name": null,
+        "hospital_distance_m": null,
+        "dust_suppression_required": false,
+        "dust_suppression_observed": false,
+        "last_inspection_date": null,
+        "violation_count_90d": 0
+      },
+      "score_breakdown": {
+        "wind_alignment_score": 0.79,
+        "chemical_match_score": 0.71,
+        "temporal_match_score": 0.93,
+        "proximity_score": 0.82,
+        "compliance_penalty": 0.00,
+        "confidence_score": 0.76
+      }
+    },
+    {
+      "rank": 4,
+      "id": "f2d4e6a8-5b91-4c73-9d0f-8a1b3c5e7d29",
+      "name": "Mula-Mutha Riverbank Open Waste Burning Site",
+      "type": "waste_burning",
+      "description": "Recurring unauthorized municipal solid waste burning along the north bank. Satellite thermal anomaly detected at 07:45 IST.",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [73.8302, 18.5395],
+            [73.8328, 18.5395],
+            [73.8328, 18.5418],
+            [73.8302, 18.5418],
+            [73.8302, 18.5395]
+          ]
+        ]
+      },
+      "distance_from_station_km": 2.41,
+      "bearing_from_station_deg": 275,
+      "compliance_profile": {
+        "permit_id": null,
+        "schedule_start": null,
+        "schedule_end": null,
+        "operating_at_event_time": true,
+        "near_school": false,
+        "school_name": null,
+        "school_distance_m": null,
+        "near_hospital": true,
+        "hospital_name": "Sahyadri Super Speciality Hospital",
+        "hospital_distance_m": 440,
+        "dust_suppression_required": false,
+        "dust_suppression_observed": false,
+        "last_inspection_date": null,
+        "violation_count_90d": 7
+      },
+      "score_breakdown": {
+        "wind_alignment_score": 0.68,
+        "chemical_match_score": 0.59,
+        "temporal_match_score": 0.74,
+        "proximity_score": 0.91,
+        "compliance_penalty": 0.20,
+        "confidence_score": 0.62
+      }
+    }
+  ],
+
+  "actionable_intelligence": {
+    "enforcement_priority": 0.94,
+    "priority_justification": "Top-ranked source (construction cluster) is within 380m of a school, has 3 violations in 90 days, and no active dust suppression despite permit requirement. Waste burning site is within 440m of a hospital with 7 violations.",
+    "recommended_actions": [
+      "DISPATCH_INSPECTOR",
+      "ISSUE_SHOW_CAUSE_NOTICE",
+      "ACTIVATE_WATER_SPRINKLERS",
+      "ALERT_NEAREST_TRAFFIC_POLICE"
+    ],
+    "estimated_response_time_min": 25,
+    "localized_advisory": {
+      "en": "CRITICAL AIR QUALITY ALERT — Shivajinagar station has recorded AQI 310 (Very Poor) at 08:30 IST. Dominant pollutant: PM10 (387.2 µg/m³, 3.9× NAAQS limit). Wind analysis indicates the primary source is the Hinjewadi Phase-III Construction Cluster (confidence: 91%). No dust suppression measures are active on-site. A school (Vibgyor High, Balewadi) is located 380m from the source. Immediate inspection and enforcement action is required. Secondary alert: Unauthorized waste burning detected on the Mula-Mutha riverbank, 440m from Sahyadri Hospital.",
+      "hi": "गंभीर वायु गुणवत्ता चेतावनी — शिवाजीनगर स्टेशन पर सुबह 08:30 IST पर AQI 310 (अत्यंत खराब) दर्ज किया गया है। प्रमुख प्रदूषक: PM10 (387.2 µg/m³, NAAQS सीमा से 3.9 गुना अधिक)। वायु विश्लेषण के अनुसार प्राथमिक स्रोत हिंजेवाड़ी फेज-III निर्माण क्लस्टर है (विश्वसनीयता: 91%)। साइट पर कोई धूल नियंत्रण उपाय सक्रिय नहीं है। स्रोत से 380 मीटर की दूरी पर एक विद्यालय (विबग्योर हाई, बालेवाडी) स्थित है। तत्काल निरीक्षण और प्रवर्तन कार्रवाई आवश्यक है। द्वितीयक चेतावनी: मुला-मुठा नदी तट पर अनधिकृत कचरा जलाने का पता चला है, सह्याद्री अस्पताल से 440 मीटर दूर।",
+      "mr": "गंभीर हवा गुणवत्ता इशारा — शिवाजीनगर स्थानकावर सकाळी 08:30 IST ला AQI 310 (अत्यंत खराब) नोंदवला गेला आहे। प्रमुख प्रदूषक: PM10 (387.2 µg/m³, NAAQS मर्यादेपेक्षा 3.9 पट अधिक). वारा विश्लेषणानुसार प्राथमिक स्रोत हिंजेवाडी फेज-III बांधकाम क्लस्टर आहे (विश्वासार्हता: 91%). साइटवर कोणतेही धूळ नियंत्रण उपाय सक्रिय नाहीत. स्रोतापासून 380 मीटर अंतरावर एक शाळा (विबग्योर हाय, बालेवाडी) आहे. तात्काळ तपासणी आणि अंमलबजावणी कारवाई आवश्यक आहे. दुय्यम इशारा: मुळा-मुठा नदीकाठावर अनधिकृत कचरा जाळणे आढळले, सह्याद्री रुग्णालयापासून 440 मीटर अंतरावर."
+    },
+    "notification_channels": ["sms", "whatsapp", "push_notification", "email"],
+    "field_team_assignment": {
+      "team_id": "PMC-AQ-SQUAD-07",
+      "team_lead": "Inspector R. S. Kulkarni",
+      "contact": "+91-20-XXXX-XXXX",
+      "eta_minutes": 18
+    }
+  },
+
+  "_meta": {
+    "schema_version": "1.0.0",
+    "contract_name": "AirQualitySpikeAttribution",
+    "description": "Immutable data contract between FastAPI attribution engine and React+Leaflet frontend. All coordinate arrays follow GeoJSON convention: [longitude, latitude].",
+    "maintainers": ["backend-team@hackathon.dev", "frontend-team@hackathon.dev"],
+    "last_updated": "2026-06-25",
+    "coordinate_reference_system": "EPSG:4326",
+    "aqi_standard": "India_NAQI",
+    "changelog": [
+      {
+        "version": "1.0.0",
+        "date": "2026-06-25",
+        "notes": "Initial data contract. Covers 3-stage attribution funnel: Spatial → Weather → Chemical."
+      }
+    ]
+  }
+}
