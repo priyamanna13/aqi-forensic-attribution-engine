@@ -187,36 +187,38 @@ class CPCBPoller:
             except Exception as exc:
                 log.warning("CPCB fetch failed for %s: %s", station_name, exc)
 
-        # 4. Merge data sources (WAQI + OWM Air + CPCB)
+        # 4. Merge data sources (WAQI + OWM Air + CPCB) using Consensus Averaging
         if waqi_data or owm_air_data or cpcb_data:
             IST = timezone(timedelta(hours=5, minutes=30))
             now_ist = datetime.now(IST)
 
-            # Default fallback structures
-            merged_pollutants = {
-                "pm25": None, "pm10": None, "no2": None,
-                "so2": None, "co": None, "o3": None
+            # Collect all available non-null readings for each pollutant across the 3 APIs
+            pollutant_collections = {
+                "pm25": [], "pm10": [], "no2": [],
+                "so2": [], "co": [], "o3": []
             }
 
-            # Merge WAQI values first (high-quality real-time baseline)
-            if waqi_data:
-                for k, v in waqi_data["pollutants"].items():
-                    if v is not None:
-                        merged_pollutants[k] = v
+            sources = []
+            if waqi_data: sources.append(waqi_data.get("pollutants", {}))
+            if owm_air_data: sources.append(owm_air_data.get("pollutants", {}))
+            if cpcb_data: sources.append(cpcb_data)  # CPCB has pollutants flat in the dict
 
-            # Fill / Enrich missing fields using OpenWeatherMap Air Pollution API
-            if owm_air_data:
-                for k, v in owm_air_data["pollutants"].items():
-                    if v is not None:
-                        if merged_pollutants[k] is None:
-                            merged_pollutants[k] = v
-
-            # Merge/Overlay with CPCB ground truth values
-            if cpcb_data:
-                for p_key in ["pm25", "pm10", "no2", "so2", "co", "o3"]:
-                    val = cpcb_data.get(p_key)
+            for source in sources:
+                for p_key in pollutant_collections.keys():
+                    val = source.get(p_key)
                     if val is not None:
-                        merged_pollutants[p_key] = val
+                        pollutant_collections[p_key].append(float(val))
+
+            # Compute the consensus (average) for each pollutant
+            merged_pollutants = {}
+            for p_key, values in pollutant_collections.items():
+                if values:
+                    # If we have multiple readings, take the average to smooth out outliers
+                    avg_val = sum(values) / len(values)
+                    merged_pollutants[p_key] = round(avg_val, 2)
+                    log.debug("Consensus for %s %s: %s (from %d sources)", station_name, p_key, avg_val, len(values))
+                else:
+                    merged_pollutants[p_key] = None
 
             merged_aqi = calculate_indian_aqi(merged_pollutants)
 
