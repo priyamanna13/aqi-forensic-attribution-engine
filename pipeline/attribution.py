@@ -486,10 +486,15 @@ def _recommended_actions(
         top = candidates[0]
         cp = top.get("compliance_profile", {})
         src_type = top.get("type", "")
+        operating = cp.get("operating_at_event_time", False)
 
-        # Dispatch inspector for any Moderate+ event with an active source
-        if cp.get("operating_at_event_time"):
+        # Dispatch inspector for any Poor+ event, or Moderate if active
+        if aqi_value >= _AQI_POOR or operating:
             actions.append("DISPATCH_INSPECTOR")
+            
+        # Flag illegal off-hours operation
+        if aqi_value >= _AQI_POOR and not operating and src_type in ("construction", "industrial"):
+            actions.append("INVESTIGATE_ILLEGAL_OFF_HOURS_OPERATION")
 
         # Show-cause notice only at Poor+ (≥ 200) near sensitive locations
         if aqi_value >= _AQI_POOR and (cp.get("near_school") or cp.get("near_hospital")):
