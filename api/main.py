@@ -270,7 +270,7 @@ def latest_spike(
                 alert = None
 
     if alert is None:
-        # Construct baseline payload representing normal conditions:
+        # Construct baseline payload with REAL attribution engine output:
         from db.models import AqiReading, WindData
         from pipeline.pasquill import wind_direction_cardinal
         import uuid
@@ -329,6 +329,68 @@ def latest_spike(
         from pipeline.station_meta import get_station_meta
         meta = get_station_meta(station.name)
 
+        # ---- Run REAL attribution engine always — never return empty sources ----
+        from pipeline.attribution import run_attribution
+        from pipeline.pasquill import wind_direction_cardinal
+        from pipeline.naaqs import dominant_pollutant as _dom_pollutant, compute_exceedance_factors, POLLUTANT_DISPLAY
+        from pipeline.spike_detector import compute_chemical_fingerprint
+
+        pollutant_vals = {
+            "pm25": float(latest_reading.pm25) if (latest_reading and latest_reading.pm25) else 25.0,
+            "pm10": float(latest_reading.pm10) if (latest_reading and latest_reading.pm10) else 50.0,
+            "no2":  float(latest_reading.no2)  if (latest_reading and latest_reading.no2)  else 20.0,
+            "so2":  float(latest_reading.so2)  if (latest_reading and latest_reading.so2)  else 10.0,
+            "co":   float(latest_reading.co)   if (latest_reading and latest_reading.co)   else 0.5,
+            "o3":   float(latest_reading.o3)   if (latest_reading and latest_reading.o3)   else 15.0,
+        }
+        dom_key, _dom_factor = _dom_pollutant(pollutant_vals)
+        exc_factors = compute_exceedance_factors(pollutant_vals)
+        fingerprint = compute_chemical_fingerprint(pollutant_vals, exc_factors)
+        signature_class = fingerprint.signature_class or "mixed"
+        dom_display = POLLUTANT_DISPLAY.get(dom_key, "PM2.5")
+
+        try:
+            lower_half = run_attribution(
+                session=session,
+                station_lon=lon,
+                station_lat=lat,
+                station_name=station.name,
+                spike_ts=now_ist,
+                aqi_value=aqi_val,
+                dominant_pollutant=dom_display,
+                signature_class=signature_class,
+                wind_direction_deg=wind_dir,
+                wind_speed_kmh=wind_spd,
+                pasquill_class="D",
+                top_n=4,
+                pollutant_readings=pollutant_vals,
+                precipitation_mm_last_1h=0.0,
+            )
+            log.info(
+                "[attribution/baseline] station=%r aqi=%.1f sources=%d",
+                station.name, aqi_val,
+                len(lower_half.get("ranked_candidates", [])),
+            )
+        except Exception as exc:
+            log.error("[attribution/baseline] run_attribution failed for %s: %s", station.name, exc)
+            lower_half = {
+                "wind_cone_geometry": None,
+                "ranked_candidates": [],
+                "actionable_intelligence": {
+                    "enforcement_priority": 0.0,
+                    "priority_justification": "Attribution engine temporarily unavailable.",
+                    "recommended_actions": [],
+                    "localized_advisory": {
+                        "en": f"Air quality at {station.name} is currently at AQI {aqi_val:.0f}.",
+                        "hi": f"{station.name} पर AQI {aqi_val:.0f} दर्ज किया गया है।",
+                        "mr": f"{station.name} येथील AQI {aqi_val:.0f} आहे.",
+                    },
+                    "field_team_assignment": None,
+                    "notification_channels": [],
+                    "ambiguous": False,
+                },
+            }
+
         details = {
             "event_id": str(uuid.uuid4()),
             "event_severity": "moderate" if aqi_val >= 100 else "normal",
@@ -346,18 +408,18 @@ def latest_spike(
                     "timestamp": now_iso,
                     "total_aqi": round(aqi_val, 1),
                     "aqi_category": "Moderate" if aqi_val >= 100 else "Satisfactory",
-                    "dominant_pollutant": "PM2.5",
-                    "pm25": latest_reading.pm25 if (latest_reading and latest_reading.pm25 is not None) else 25.0,
-                    "pm10": latest_reading.pm10 if (latest_reading and latest_reading.pm10 is not None) else 50.0,
-                    "no2": latest_reading.no2 if (latest_reading and latest_reading.no2 is not None) else 20.0,
-                    "so2": latest_reading.so2 if (latest_reading and latest_reading.so2 is not None) else 10.0,
-                    "co": latest_reading.co if (latest_reading and latest_reading.co is not None) else 0.5,
-                    "o3": latest_reading.o3 if (latest_reading and latest_reading.o3 is not None) else 15.0,
+                    "dominant_pollutant": dom_display,
+                    "pm25": pollutant_vals["pm25"],
+                    "pm10": pollutant_vals["pm10"],
+                    "no2":  pollutant_vals["no2"],
+                    "so2":  pollutant_vals["so2"],
+                    "co":   pollutant_vals["co"],
+                    "o3":   pollutant_vals["o3"],
                     "chemical_fingerprint": {
-                        "so2_no2_ratio": round((latest_reading.so2 / latest_reading.no2), 2) if (latest_reading and latest_reading.so2 and latest_reading.no2) else 1.0,
-                        "pm25_pm10_ratio": round((latest_reading.pm25 / latest_reading.pm10), 2) if (latest_reading and latest_reading.pm25 and latest_reading.pm10) else 0.5,
-                        "signature_class": "mixed",
-                        "notes": "Ambient conditions derived from live CAAQMS / WAQI / OpenWeatherMap APIs."
+                        "so2_no2_ratio": round(pollutant_vals["so2"] / pollutant_vals["no2"], 2) if pollutant_vals["no2"] else 1.0,
+                        "pm25_pm10_ratio": round(pollutant_vals["pm25"] / pollutant_vals["pm10"], 2) if pollutant_vals["pm10"] else 0.5,
+                        "signature_class": signature_class,
+                        "notes": fingerprint.notes or "Ambient conditions derived from live CAAQMS / WAQI / OpenWeatherMap APIs.",
                     }
                 }
             },
@@ -378,21 +440,21 @@ def latest_spike(
                 "relative_humidity_pct": 60.0,
                 "precipitation_mm_last_1h": 0.0
             },
-            "wind_cone_geometry": None,
-            "ranked_candidates": [],
-            "actionable_intelligence": {
+            "wind_cone_geometry": lower_half.get("wind_cone_geometry"),
+            "ranked_candidates": lower_half.get("ranked_candidates", []),
+            "actionable_intelligence": lower_half.get("actionable_intelligence", {
                 "enforcement_priority": 0.0,
-                "priority_justification": "Air quality is within normal limits. No enforcement actions required.",
+                "priority_justification": "Air quality is within normal limits.",
                 "recommended_actions": [],
                 "localized_advisory": {
                     "en": f"Air quality at {station.name} is currently satisfactory (AQI: {aqi_val:.0f}).",
                     "hi": f"{station.name} पर वायु गुणवत्ता वर्तमान में संतोषजनक है (AQI: {aqi_val:.0f})।",
-                    "mr": f"{station.name} येथील हवेची गुणवत्ता सध्या समाधानकारक आहे (AQI: {aqi_val:.0f})."
+                    "mr": f"{station.name} येथील हवेची गुणवत्ता सध्या समाधानकारक आहे (AQI: {aqi_val:.0f}).",
                 },
                 "field_team_assignment": None,
                 "notification_channels": [],
-                "ambiguous": False
-            },
+                "ambiguous": False,
+            }),
             "pre_alerts": {
                 "source": "None",
                 "eta_minutes": 0,
