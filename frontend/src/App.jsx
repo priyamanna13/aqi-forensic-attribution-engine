@@ -1663,8 +1663,10 @@ export default function App() {
               </p>
             </div>
 
-            {/* ── FORENSIC ENFORCEMENT ACTION CENTER ── */}
-            {activeData?.actionable_intelligence && (
+            {/* ── FORENSIC ENFORCEMENT ACTION CENTER — only shown when AQI warrants action ── */}
+            {activeData?.actionable_intelligence &&
+             activeData.actionable_intelligence.enforcement_priority > 0 &&
+             activeData.actionable_intelligence.recommended_actions?.length > 0 && (
               <div style={{
                 background: activeData.actionable_intelligence.enforcement_priority > 0.3 ? 'rgba(244,63,94,0.03)' : 'rgba(96,165,250,0.02)',
                 border: activeData.actionable_intelligence.enforcement_priority > 0.3 ? '1px solid rgba(244,63,94,0.15)' : '1px solid rgba(96,165,250,0.1)',
@@ -1684,8 +1686,8 @@ export default function App() {
                       letterSpacing: '0.08em', textTransform: 'uppercase'
                     }}>
                       {activeLang === 'en' ? 'Forensic Action Center'
-                      : activeLang === 'hi' ? '\u092A\u094D\u0930\u0935\u0930\u094D\u0924\u0928 \u0915\u093E\u0930\u094D\u0930\u0935\u093E\u0908 \u0915\u0947\u0902\u0926\u094D\u0930'
-                      : '\u092A\u094D\u0930\u0935\u0930\u094D\u0924\u0928 \u0915\u093E\u0930\u094D\u0930\u0935\u093E\u0939\u0940 \u0915\u0947\u0902\u0926\u094D\u0930'}
+                      : activeLang === 'hi' ? 'प्रवर्तन कार्रवाई केंद्र'
+                      : 'प्रवर्तन कार्रवाही केंद्र'}
                     </span>
                   </div>
                   <span style={{
@@ -1696,8 +1698,8 @@ export default function App() {
                     border: activeData.actionable_intelligence.enforcement_priority > 0.3 ? '1px solid rgba(244,63,94,0.2)' : '1px solid rgba(255,255,255,0.08)'
                   }}>
                     {activeData.actionable_intelligence.enforcement_priority > 0.3
-                      ? (activeLang === 'en' ? 'HIGH PRIORITY' : '\u0909\u091A\u094D\u091A \u092A\u094D\u0930\u093E\u0925\u092E\u093F\u0915\u0924\u093E')
-                      : (activeLang === 'en' ? 'MONITORING' : '\u0928\u093F\u0910\u0902\u0924\u094D\u0930\u0923')}
+                      ? (activeLang === 'en' ? 'HIGH PRIORITY' : 'उच्च प्राथमिकता')
+                      : (activeLang === 'en' ? 'MONITORING' : 'निऐंत्रण')}
                   </span>
                 </div>
 

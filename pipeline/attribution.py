@@ -461,27 +461,56 @@ def _source_description(source: PollutionSource) -> str:
     return descs.get(source.type, "Pollution source near the station.")
 
 
+# AQI thresholds for enforcement actions (Indian CPCB NAQI categories)
+_AQI_MODERATE   = 100   # Moderate — begin monitoring
+_AQI_POOR       = 200   # Poor     — enforcement actions warranted
+_AQI_VERY_POOR  = 300   # Very Poor — public health advisory
+
+
 def _recommended_actions(
     candidates: list[dict[str, Any]],
     aqi_value: float,
 ) -> list[str]:
+    """Return enforcement actions appropriate for the current AQI level.
+
+    Actions are only generated when AQI warrants intervention:
+      < 100  (Good / Satisfactory) — no actions, just monitor sources
+      ≥ 100  (Moderate)            — dispatch inspector if source is active
+      ≥ 200  (Poor)                — show-cause notices, sprinklers
+      ≥ 300  (Very Poor / Severe)  — public health advisory
+    """
     actions: list[str] = []
-    if candidates:
+
+    # Only trigger enforcement when AQI is at least Moderate (≥ 100)
+    if aqi_value >= _AQI_MODERATE and candidates:
         top = candidates[0]
         cp = top.get("compliance_profile", {})
         src_type = top.get("type", "")
+
+        # Dispatch inspector for any Moderate+ event with an active source
         if cp.get("operating_at_event_time"):
             actions.append("DISPATCH_INSPECTOR")
-        if cp.get("near_school") or cp.get("near_hospital"):
+
+        # Show-cause notice only at Poor+ (≥ 200) near sensitive locations
+        if aqi_value >= _AQI_POOR and (cp.get("near_school") or cp.get("near_hospital")):
             actions.append("ISSUE_SHOW_CAUSE_NOTICE")
-        if src_type in ("construction", "industrial"):
+
+        # Dust suppression at Poor+ (≥ 200)
+        if aqi_value >= _AQI_POOR and src_type in ("construction", "industrial"):
             actions.append("ACTIVATE_WATER_SPRINKLERS")
+
+        # Traffic police at Moderate+ (≥ 100) for traffic corridors
         if src_type == "traffic":
             actions.append("ALERT_NEAREST_TRAFFIC_POLICE")
+
+        # Fire brigade any time there is active waste burning and AQI ≥ Moderate
         if src_type == "waste_burning":
             actions.append("DISPATCH_FIRE_BRIGADE")
-    if aqi_value >= 300:
+
+    # Public health advisory only at Very Poor / Severe (≥ 300)
+    if aqi_value >= _AQI_VERY_POOR:
         actions.append("ISSUE_PUBLIC_HEALTH_ADVISORY")
+
     return list(dict.fromkeys(actions))  # deduplicate, preserve order
 
 
