@@ -882,11 +882,31 @@ def revert_simulated_spike(
             deleted_readings += 1
             
     session.commit()
-    log.info("Reverted simulation for %s: deleted %d alerts, %d readings", station_name, deleted_alerts, deleted_readings)
+
+    # 3. Restore the station's last_aqi and last_updated to the latest valid non-simulated reading remaining
+    latest_valid = session.execute(
+        select(AqiReading)
+        .where(AqiReading.station_id == str(station.id))
+        .where(AqiReading.aqi < 300.0)
+        .order_by(AqiReading.timestamp.desc())
+        .limit(1)
+    ).scalars().first()
+    
+    if latest_valid:
+        station.last_aqi = latest_valid.aqi
+        station.last_updated = latest_valid.timestamp
+    else:
+        station.last_aqi = 50.0
+        station.last_updated = datetime.now(IST)
+        
+    session.commit()
+    log.info("Reverted simulation for %s: deleted %d alerts, %d readings, restored last_aqi to %s", 
+             station_name, deleted_alerts, deleted_readings, station.last_aqi)
     return {
         "status": "ok",
         "deleted_simulated_alerts": deleted_alerts,
-        "deleted_simulated_readings": deleted_readings
+        "deleted_simulated_readings": deleted_readings,
+        "restored_last_aqi": station.last_aqi
     }
 
 
