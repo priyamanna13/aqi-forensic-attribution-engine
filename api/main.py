@@ -843,6 +843,53 @@ def trigger_simulated_spike(
     return run_attribution_endpoint(req, session, is_simulated=True)
 
 
+@app.post("/api/v1/simulation/revert-spike", tags=["Simulation"])
+def revert_simulated_spike(
+    station_name: str = Query("Shivajinagar", description="Station name to revert simulation on"),
+    session: Session = Depends(get_db),
+):
+    """Delete any simulated alerts for the station to restore live baseline telemetry."""
+    station = _get_station_or_404(session, station_name)
+    
+    # 1. Fetch and delete alerts marked as simulated
+    alerts = session.execute(
+        select(Alert).where(Alert.station_id == str(station.id))
+    ).scalars().all()
+    
+    deleted_alerts = 0
+    for alert in alerts:
+        details = dict(alert.attribution_details or {})
+        if details.get("is_simulated", False):
+            session.delete(alert)
+            deleted_alerts += 1
+            
+    session.commit()
+    
+    # 2. Delete any high AQI simulated readings from aqi_readings to prevent baseline contamination
+    from db.models import AqiReading
+    readings = session.execute(
+        select(AqiReading)
+        .where(AqiReading.station_id == str(station.id))
+        .order_by(AqiReading.timestamp.desc())
+        .limit(10)
+    ).scalars().all()
+    
+    deleted_readings = 0
+    for r in readings:
+        # Simulated spike AQI is 310, check for simulated / high reading
+        if r.aqi >= 300.0:
+            session.delete(r)
+            deleted_readings += 1
+            
+    session.commit()
+    log.info("Reverted simulation for %s: deleted %d alerts, %d readings", station_name, deleted_alerts, deleted_readings)
+    return {
+        "status": "ok",
+        "deleted_simulated_alerts": deleted_alerts,
+        "deleted_simulated_readings": deleted_readings
+    }
+
+
 # ============================================================
 # WebSocket Live Push Endpoints (Phase 3)
 # ============================================================

@@ -787,6 +787,17 @@ function PlaybackBanner({ timestamp, isLoading, isGap }) {
 
 // ─── APP ──────────────────────────────────────────────────────────────────────────
 
+const getAqiCategoryInfo = (aqi) => {
+  if (aqi === null || aqi === undefined) return { label: 'UNKNOWN', color: '#9ca3af', bg: 'rgba(156,163,175,0.1)', border: 'rgba(156,163,175,0.25)' };
+  const val = Number(aqi);
+  if (val <= 50) return { label: 'GOOD', color: '#22c55e', bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.3)' };
+  if (val <= 100) return { label: 'SATISFACTORY', color: '#84cc16', bg: 'rgba(132,204,22,0.12)', border: 'rgba(132,204,22,0.3)' };
+  if (val <= 200) return { label: 'MODERATE', color: '#eab308', bg: 'rgba(234,179,8,0.12)', border: 'rgba(234,179,8,0.3)' };
+  if (val <= 300) return { label: 'POOR', color: '#f97316', bg: 'rgba(249,115,22,0.12)', border: 'rgba(249,115,22,0.3)' };
+  if (val <= 400) return { label: 'VERY POOR', color: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)' };
+  return { label: 'SEVERE', color: '#b91c1c', bg: 'rgba(185,28,28,0.15)', border: 'rgba(185,28,28,0.35)' };
+};
+
 export default function App() {
   // ── UI state
   const [activeLang,   setActiveLang]   = useState('en');
@@ -1089,6 +1100,12 @@ export default function App() {
     spikeActiveRef.current = false;
     setSpikeActive(false);
     try {
+      // Clear simulated database records first
+      await fetch(
+        `${API.BASE_URL}/api/v1/simulation/revert-spike?station_name=${currentStation}`,
+        { method: 'POST' }
+      ).catch(() => {});
+
       const data = await API.getAttributionLive(currentStation);
       startTransition(() => {
         setDashboardData(data);
@@ -1219,10 +1236,20 @@ export default function App() {
             <Popup>
               <div className="popup-inner">
                 <div className="popup-station-name">{trigger_station?.name ?? 'Trigger Station'}</div>
-                <div className="popup-aqi-badge">
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }}/>
-                  CRITICAL &middot; {trigger_station?.reading?.total_aqi ?? '\u2014'} AQI
-                </div>
+                {(() => {
+                  const info = getAqiCategoryInfo(trigger_station?.reading?.total_aqi);
+                  return (
+                    <div className="popup-aqi-badge" style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '5px',
+                      background: 'rgba(255,255,255,0.03)', padding: '2px 8px', borderRadius: '4px',
+                      border: `1px solid ${info.color}`
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: info.color, display: 'inline-block' }}/>
+                      <span style={{ color: info.color, fontWeight: 700, fontSize: '10px' }}>{info.label}</span>
+                      <span style={{ color: '#a1a1aa', fontSize: '10px' }}>&middot; {trigger_station?.reading?.total_aqi ?? '\u2014'} AQI</span>
+                    </div>
+                  );
+                })()}
                 {spikeActive && (
                   <div style={{ fontSize: 10, color: '#f87171', marginTop: 5, fontWeight: 700 }}>
                     &#x26A1; Simulated data
@@ -1502,13 +1529,22 @@ export default function App() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
               {/* AQI pill */}
-              <div className="aqi-pill">
-                <div className="aqi-pulse-dot"/>
-                <div>
-                  <div className="aqi-number">{trigger_station?.reading?.total_aqi ?? '\u2014'}</div>
-                  <div className="aqi-label">AQI</div>
-                </div>
-              </div>
+              {(() => {
+                const info = getAqiCategoryInfo(trigger_station?.reading?.total_aqi);
+                return (
+                  <div className="aqi-pill" style={{
+                    background: info.bg,
+                    border: `1px solid ${info.border}`,
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <div className="aqi-pulse-dot" style={{ background: info.color }}/>
+                    <div>
+                      <div className="aqi-number" style={{ color: info.color }}>{trigger_station?.reading?.total_aqi ?? '\u2014'}</div>
+                      <div className="aqi-label" style={{ color: info.color, opacity: 0.8 }}>AQI</div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* ── EMERGENCY SPIKE BUTTON ──
                   Only rendered when live feed has failed ≥ SPIKE_FAILURE_THRESHOLD polls.
@@ -1624,6 +1660,97 @@ export default function App() {
                 })()}
               </p>
             </div>
+
+            {/* ── FORENSIC ENFORCEMENT ACTION CENTER ── */}
+            {activeData?.actionable_intelligence && (
+              <div style={{
+                background: activeData.actionable_intelligence.enforcement_priority > 0.3 ? 'rgba(244,63,94,0.03)' : 'rgba(96,165,250,0.02)',
+                border: activeData.actionable_intelligence.enforcement_priority > 0.3 ? '1px solid rgba(244,63,94,0.15)' : '1px solid rgba(96,165,250,0.1)',
+                borderRadius: '16px',
+                padding: '14px',
+                marginTop: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '14px' }}>🛡️</span>
+                    <span style={{
+                      fontSize: '11px', fontWeight: 800,
+                      color: activeData.actionable_intelligence.enforcement_priority > 0.3 ? '#f43f5e' : '#60a5fa',
+                      letterSpacing: '0.08em', textTransform: 'uppercase'
+                    }}>
+                      {activeLang === 'en' ? 'Forensic Action Center'
+                      : activeLang === 'hi' ? '\u092A\u094D\u0930\u0935\u0930\u094D\u0924\u0928 \u0915\u093E\u0930\u094D\u0930\u0935\u093E\u0908 \u0915\u0947\u0902\u0926\u094D\u0930'
+                      : '\u092A\u094D\u0930\u0935\u0930\u094D\u0924\u0928 \u0915\u093E\u0930\u094D\u0930\u0935\u093E\u0939\u0940 \u0915\u0947\u0902\u0926\u094D\u0930'}
+                    </span>
+                  </div>
+                  <span style={{
+                    fontSize: '9px', fontWeight: 800,
+                    color: activeData.actionable_intelligence.enforcement_priority > 0.3 ? '#f43f5e' : '#a1a1aa',
+                    background: activeData.actionable_intelligence.enforcement_priority > 0.3 ? 'rgba(244,63,94,0.1)' : 'rgba(255,255,255,0.05)',
+                    padding: '2px 8px', borderRadius: '4px',
+                    border: activeData.actionable_intelligence.enforcement_priority > 0.3 ? '1px solid rgba(244,63,94,0.2)' : '1px solid rgba(255,255,255,0.08)'
+                  }}>
+                    {activeData.actionable_intelligence.enforcement_priority > 0.3
+                      ? (activeLang === 'en' ? 'HIGH PRIORITY' : '\u0909\u091A\u094D\u091A \u092A\u094D\u0930\u093E\u0925\u092E\u093F\u0915\u0924\u093E')
+                      : (activeLang === 'en' ? 'MONITORING' : '\u0928\u093F\u0910\u0902\u0924\u094D\u0930\u0923')}
+                  </span>
+                </div>
+
+                {activeData.actionable_intelligence.priority_justification && (
+                  <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: 1.4, fontStyle: 'italic' }}>
+                    "{activeData.actionable_intelligence.priority_justification}"
+                  </div>
+                )}
+
+                {activeData.actionable_intelligence.field_team_assignment && (
+                  <div style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.04)',
+                    borderRadius: '10px',
+                    padding: '8px 10px',
+                    fontSize: '11px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#e4e4e7' }}>
+                      <span style={{ fontWeight: 700 }}>🚨 Dispatch Squad:</span>
+                      <span style={{ fontFamily: 'monospace', color: activeData.actionable_intelligence.enforcement_priority > 0.3 ? '#f43f5e' : '#60a5fa', fontWeight: 800 }}>
+                        {activeData.actionable_intelligence.field_team_assignment.team_id}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a1a1aa' }}>
+                      <span>Squad Lead:</span>
+                      <span>{activeData.actionable_intelligence.field_team_assignment.team_lead}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a1a1aa' }}>
+                      <span>Squad Contact:</span>
+                      <span style={{ fontFamily: 'monospace' }}>{activeData.actionable_intelligence.field_team_assignment.contact}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a1a1aa' }}>
+                      <span>Response ETA:</span>
+                      <span style={{ color: '#fb923c', fontWeight: 700 }}>~{activeData.actionable_intelligence.field_team_assignment.eta_minutes} mins</span>
+                    </div>
+                  </div>
+                )}
+
+                {activeData.actionable_intelligence.recommended_actions && activeData.actionable_intelligence.recommended_actions.length > 0 && (
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '8px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#e4e4e7', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                      Forensic Checklist:
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '14px', fontSize: '11px', color: '#d4d4d8', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      {activeData.actionable_intelligence.recommended_actions.map((act, idx) => (
+                        <li key={idx} style={{ lineHeight: 1.35 }}>{act}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── PRE-EMPTIVE FORECAST ── */}
