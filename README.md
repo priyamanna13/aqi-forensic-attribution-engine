@@ -13,6 +13,13 @@
 
 </div>
 
+## 🌐 Deployed Link
+
+**[https://aqi-dashboard-pxpo.onrender.com/](https://aqi-dashboard-pxpo.onrender.com/)**
+
+> ⚠️ Hosted on Render's free tier — the backend may take 30-60 seconds to spin up on first load if it's been idle. Please allow it a moment to wake up. Keep refreshing it.
+
+
 ## 📑 Table of Contents
 - [About the Project](#-about-the-project)
 - [Key Features](#-key-features)
